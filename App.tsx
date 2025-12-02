@@ -1,6 +1,9 @@
 
 // FIX: Imported useEffect from React to fix 'Cannot find name' error.
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+
+import { supabase } from './supabaseClient';
+import { convertResourceFromDB, convertResourceToDB } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
@@ -3275,10 +3278,29 @@ const App: React.FC = () => {
     const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
     const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
     const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS);
-    const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
+    const [resources, setResources] = useState<Resource[]>([]);
     const [personnel, setPersonnel] = useState<Personnel[]>(INITIAL_PERSONNEL);
     const [services, setServices] = useState<TechnicalService[]>(INITIAL_TECHNICAL_SERVICES);
     const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
+
+
+    // Load resources from Supabase on mount
+    useEffect(() => {
+    loadResourcesFromSupabase();
+    }, []);
+
+    async function loadResourcesFromSupabase() {
+    const { data, error } = await supabase.from('resources').select('*');
+    if (error) {
+        console.error('Error loading resources:', error);
+        return;
+    }
+    if (data) {
+        const converted = data.map(convertResourceFromDB);
+        setResources(converted);
+    }
+    }
+
 
     // Undo State
     const [previousBookingsState, setPreviousBookingsState] = useState<Booking[] | null>(null);
