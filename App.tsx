@@ -8,7 +8,8 @@ import {
   convertBookingFromDB, convertBookingToDB, 
   convertClientFromDB, convertClientToDB,
   convertProjectFromDB, convertProjectToDB,
-  convertPersonnelFromDB, convertPersonnelToDB 
+  convertPersonnelFromDB, convertPersonnelToDB,
+  convertTechnicalServiceFromDB, convertTechnicalServiceToDB
 } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
@@ -3290,7 +3291,7 @@ const App: React.FC = () => {
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
     const [personnel, setPersonnel] = useState<Personnel[]>([]);
-    const [services, setServices] = useState<TechnicalService[]>(INITIAL_TECHNICAL_SERVICES);
+    const [services, setServices] = useState<TechnicalService[]>([]);
     const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
 
 
@@ -3400,6 +3401,28 @@ const App: React.FC = () => {
     }
     }
 
+    // Load technical services from Supabase on mount
+    useEffect(() => {
+    loadServicesFromSupabase();
+    }, []);
+
+    async function loadServicesFromSupabase() {
+    const { data, error } = await supabase
+        .from('technical_services')
+        .select('*');
+    
+    if (error) {
+        console.error('Error loading technical services:', error);
+        return;
+    }
+    if (data) {
+        console.log('Raw technical services from Supabase:', data);
+        const converted = data.map(convertTechnicalServiceFromDB);
+        console.log('Converted technical services:', converted);
+        setServices(converted);
+    }
+    }
+
 
 
     // Undo State
@@ -3459,7 +3482,7 @@ const App: React.FC = () => {
         setCanUndo(true);
     };
 
-  const handleSave = async (type: string, data: any) => {
+ const handleSave = async (type: string, data: any) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
         client: setClients,
         project: setProjects,
@@ -3562,6 +3585,34 @@ const App: React.FC = () => {
         }
     }
     
+    // Save to Supabase for technical services
+    if (type === 'service') {
+        const isUpdate = data.id;
+        
+        if (isUpdate) {
+            // UPDATE existing service
+            const { error } = await supabase
+                .from('technical_services')
+                .update(convertTechnicalServiceToDB(finalData))
+                .eq('id', finalData.id);
+            
+            if (error) {
+                console.error('Error updating service:', error);
+                return;
+            }
+        } else {
+            // INSERT new service
+            const { error } = await supabase
+                .from('technical_services')
+                .insert([convertTechnicalServiceToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting service:', error);
+                return;
+            }
+        }
+    }
+    
     // Update local state
     if (data.id) { // Update
         updater(prev => prev.map(item => {
@@ -3577,7 +3628,7 @@ const App: React.FC = () => {
         updater(prev => [...prev, finalData]);
     }
     setModal({ type: null, data: null });
-};
+    };
 
    const handleDelete = async (type: string, id: string) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
@@ -3625,6 +3676,19 @@ const App: React.FC = () => {
         
         if (error) {
             console.error('Error deleting personnel:', error);
+            return;
+        }
+    }
+    
+    // Delete from Supabase for technical services
+    if (type === 'service') {
+        const { error } = await supabase
+            .from('technical_services')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting service:', error);
             return;
         }
     }

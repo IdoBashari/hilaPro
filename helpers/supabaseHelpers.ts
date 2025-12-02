@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking, Client, Project, Personnel } from '../types';
+import { Resource, Booking, Client, Project, Personnel, TechnicalService } from '../types';
 
 // ================================================================
 // RESOURCES (Editing Rooms)
@@ -280,4 +280,45 @@ export function convertPersonnelsFromDB(dbPersonnels: any[]): Personnel[] {
  */
 export function convertPersonnelsToDB(jsPersonnels: Personnel[]): any[] {
   return jsPersonnels.map(convertPersonnelToDB);
+}
+// ================================================================
+// TECHNICAL SERVICES
+// ================================================================
+
+/**
+ * Convert TechnicalService from Supabase format to JavaScript format
+ * Note: TechnicalService has no snake_case fields, all fields are identical
+ */
+export function convertTechnicalServiceFromDB(dbService: any): TechnicalService {
+  return {
+    id: dbService.id,
+    name: dbService.name,
+    price: dbService.price,
+  };
+}
+
+/**
+ * Convert TechnicalService from JavaScript format to Supabase format
+ * Note: TechnicalService has no snake_case fields, all fields are identical
+ */
+export function convertTechnicalServiceToDB(jsService: TechnicalService): any {
+  return {
+    id: jsService.id,
+    name: jsService.name,
+    price: jsService.price,
+  };
+}
+
+/**
+ * Convert array of technical services from Supabase to JavaScript format
+ */
+export function convertTechnicalServicesFromDB(dbServices: any[]): TechnicalService[] {
+  return dbServices.map(convertTechnicalServiceFromDB);
+}
+
+/**
+ * Convert array of technical services from JavaScript to Supabase format
+ */
+export function convertTechnicalServicesToDB(jsServices: TechnicalService[]): any[] {
+  return jsServices.map(convertTechnicalServiceToDB);
 }
