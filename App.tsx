@@ -3289,7 +3289,7 @@ const App: React.FC = () => {
     const [projects, setProjects] = useState<Project[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
-    const [personnel, setPersonnel] = useState<Personnel[]>(INITIAL_PERSONNEL);
+    const [personnel, setPersonnel] = useState<Personnel[]>([]);
     const [services, setServices] = useState<TechnicalService[]>(INITIAL_TECHNICAL_SERVICES);
     const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
 
@@ -3375,6 +3375,28 @@ const App: React.FC = () => {
         const converted = data.map(convertProjectFromDB);
         console.log('Converted projects:', converted);
         setProjects(converted);
+    }
+    }
+
+    // Load personnel from Supabase on mount
+    useEffect(() => {
+    loadPersonnelFromSupabase();
+    }, []);
+
+    async function loadPersonnelFromSupabase() {
+    const { data, error } = await supabase
+        .from('personnel')
+        .select('*');
+    
+    if (error) {
+        console.error('Error loading personnel:', error);
+        return;
+    }
+    if (data) {
+        console.log('Raw personnel from Supabase:', data);
+        const converted = data.map(convertPersonnelFromDB);
+        console.log('Converted personnel:', converted);
+        setPersonnel(converted);
     }
     }
 
@@ -3512,6 +3534,34 @@ const App: React.FC = () => {
         }
     }
     
+    // Save to Supabase for personnel
+    if (type === 'personnel') {
+        const isUpdate = data.id;
+        
+        if (isUpdate) {
+            // UPDATE existing personnel
+            const { error } = await supabase
+                .from('personnel')
+                .update(convertPersonnelToDB(finalData))
+                .eq('id', finalData.id);
+            
+            if (error) {
+                console.error('Error updating personnel:', error);
+                return;
+            }
+        } else {
+            // INSERT new personnel
+            const { error } = await supabase
+                .from('personnel')
+                .insert([convertPersonnelToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting personnel:', error);
+                return;
+            }
+        }
+    }
+    
     // Update local state
     if (data.id) { // Update
         updater(prev => prev.map(item => {
@@ -3527,7 +3577,7 @@ const App: React.FC = () => {
         updater(prev => [...prev, finalData]);
     }
     setModal({ type: null, data: null });
-    };
+};
 
    const handleDelete = async (type: string, id: string) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
@@ -3566,9 +3616,22 @@ const App: React.FC = () => {
         }
     }
     
+    // Delete from Supabase for personnel
+    if (type === 'personnel') {
+        const { error } = await supabase
+            .from('personnel')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting personnel:', error);
+            return;
+        }
+    }
+    
     // Update local state
     stateUpdater[type](prev => prev.filter(item => item.id !== id));
-    }; 
+};
         
         // Booking Modal Handlers
         const handleNewBooking = (resourceId?: string, date?: Date) => {
