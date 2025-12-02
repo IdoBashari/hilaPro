@@ -3317,7 +3317,9 @@ async function loadBookingsFromSupabase() {
     return;
   }
   if (data) {
+    console.log('Raw data from Supabase:', data);
     const converted = data.map(convertBookingFromDB);
+    console.log('Converted bookings:', converted);
     setBookings(converted);
   }
 }
@@ -3438,16 +3440,37 @@ async function loadBookingsFromSupabase() {
       setIsBookingModalOpen(true);
     };
     
-    const saveBookingsToState = (bookingsToSave: BookingFormData[]) => {
-        commitBookingsChange(prev => {
-            const editedIds = new Set(bookingsToSave.map(b => b.id).filter(Boolean));
-            const baseBookings = prev.filter(b => !editedIds.has(b.id));
-            const finalBookingsToAdd = bookingsToSave.map(b => 
-                b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
-            );
-            return [...baseBookings, ...finalBookingsToAdd];
-        });
-    };
+    const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
+    // Step 1: Prepare bookings with IDs
+    const finalBookingsToAdd = bookingsToSave.map(b => 
+        b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
+    );
+    
+    // Step 2: Save to Supabase
+    for (const booking of finalBookingsToAdd) {
+        const isUpdate = bookingsToSave.find(b => b.id === booking.id);
+        
+        if (isUpdate) {
+            // UPDATE existing booking
+            await supabase
+                .from('bookings')
+                .update(convertBookingToDB(booking))
+                .eq('id', booking.id);
+        } else {
+            // INSERT new booking
+            await supabase
+                .from('bookings')
+                .insert([convertBookingToDB(booking)]);
+        }
+    }
+    
+    // Step 3: Update local state
+    commitBookingsChange(prev => {
+        const editedIds = new Set(finalBookingsToAdd.map(b => b.id));
+        const baseBookings = prev.filter(b => !editedIds.has(b.id));
+        return [...baseBookings, ...finalBookingsToAdd];
+    });
+};
     
     const handleConfirmedSaveBooking = (bookingsToSave: BookingFormData[]) => {
         if (bookingsToSave.length === 1) {
