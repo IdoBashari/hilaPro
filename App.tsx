@@ -9,7 +9,8 @@ import {
   convertClientFromDB, convertClientToDB,
   convertProjectFromDB, convertProjectToDB,
   convertPersonnelFromDB, convertPersonnelToDB,
-  convertTechnicalServiceFromDB, convertTechnicalServiceToDB
+  convertTechnicalServiceFromDB, convertTechnicalServiceToDB,
+  convertMaterialFromDB, convertMaterialToDB
 } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
@@ -3292,7 +3293,7 @@ const App: React.FC = () => {
     const [resources, setResources] = useState<Resource[]>([]);
     const [personnel, setPersonnel] = useState<Personnel[]>([]);
     const [services, setServices] = useState<TechnicalService[]>([]);
-    const [materials, setMaterials] = useState<Material[]>(INITIAL_MATERIALS);
+    const [materials, setMaterials] = useState<Material[]>([]);
 
 
     // Load resources from Supabase on mount
@@ -3423,6 +3424,28 @@ const App: React.FC = () => {
     }
     }
 
+    // Load materials from Supabase on mount
+useEffect(() => {
+  loadMaterialsFromSupabase();
+}, []);
+
+async function loadMaterialsFromSupabase() {
+  const { data, error } = await supabase
+    .from('materials')
+    .select('*');
+  
+  if (error) {
+    console.error('Error loading materials:', error);
+    return;
+  }
+  if (data) {
+    console.log('Raw materials from Supabase:', data);
+    const converted = data.map(convertMaterialFromDB);
+    console.log('Converted materials:', converted);
+    setMaterials(converted);
+  }
+}
+
 
 
     // Undo State
@@ -3482,7 +3505,7 @@ const App: React.FC = () => {
         setCanUndo(true);
     };
 
- const handleSave = async (type: string, data: any) => {
+    const handleSave = async (type: string, data: any) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
         client: setClients,
         project: setProjects,
@@ -3613,6 +3636,34 @@ const App: React.FC = () => {
         }
     }
     
+    // Save to Supabase for materials
+    if (type === 'material') {
+        const isUpdate = data.id;
+        
+        if (isUpdate) {
+            // UPDATE existing material
+            const { error } = await supabase
+                .from('materials')
+                .update(convertMaterialToDB(finalData))
+                .eq('id', finalData.id);
+            
+            if (error) {
+                console.error('Error updating material:', error);
+                return;
+            }
+        } else {
+            // INSERT new material
+            const { error } = await supabase
+                .from('materials')
+                .insert([convertMaterialToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting material:', error);
+                return;
+            }
+        }
+    }
+    
     // Update local state
     if (data.id) { // Update
         updater(prev => prev.map(item => {
@@ -3628,9 +3679,9 @@ const App: React.FC = () => {
         updater(prev => [...prev, finalData]);
     }
     setModal({ type: null, data: null });
-    };
+};
 
-   const handleDelete = async (type: string, id: string) => {
+ const handleDelete = async (type: string, id: string) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
         client: setClients,
         project: setProjects,
@@ -3689,6 +3740,19 @@ const App: React.FC = () => {
         
         if (error) {
             console.error('Error deleting service:', error);
+            return;
+        }
+    }
+    
+    // Delete from Supabase for materials
+    if (type === 'material') {
+        const { error } = await supabase
+            .from('materials')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting material:', error);
             return;
         }
     }

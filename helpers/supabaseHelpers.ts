@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking, Client, Project, Personnel, TechnicalService } from '../types';
+import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material } from '../types';
 
 // ================================================================
 // RESOURCES (Editing Rooms)
@@ -321,4 +321,45 @@ export function convertTechnicalServicesFromDB(dbServices: any[]): TechnicalServ
  */
 export function convertTechnicalServicesToDB(jsServices: TechnicalService[]): any[] {
   return jsServices.map(convertTechnicalServiceToDB);
+}
+// ================================================================
+// MATERIALS (Raw Materials/Hardware)
+// ================================================================
+
+/**
+ * Convert Material from Supabase format (snake_case) to JavaScript format (camelCase)
+ */
+export function convertMaterialFromDB(dbMaterial: any): Material {
+  return {
+    id: dbMaterial.id,
+    name: dbMaterial.name,
+    purchasePrice: dbMaterial.purchase_price,
+    sellingPrice: dbMaterial.selling_price,
+  };
+}
+
+/**
+ * Convert Material from JavaScript format (camelCase) to Supabase format (snake_case)
+ */
+export function convertMaterialToDB(jsMaterial: Material): any {
+  return {
+    id: jsMaterial.id,
+    name: jsMaterial.name,
+    purchase_price: jsMaterial.purchasePrice,
+    selling_price: jsMaterial.sellingPrice,
+  };
+}
+
+/**
+ * Convert array of materials from Supabase to JavaScript format
+ */
+export function convertMaterialsFromDB(dbMaterials: any[]): Material[] {
+  return dbMaterials.map(convertMaterialFromDB);
+}
+
+/**
+ * Convert array of materials from JavaScript to Supabase format
+ */
+export function convertMaterialsToDB(jsMaterials: Material[]): any[] {
+  return jsMaterials.map(convertMaterialToDB);
 }
