@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 
 import { supabase } from './supabaseClient';
-import { convertResourceFromDB, convertResourceToDB, convertBookingFromDB, convertBookingToDB } from './helpers/supabaseHelpers';
+import { convertResourceFromDB, convertResourceToDB, convertBookingFromDB, convertBookingToDB, convertClientFromDB, convertClientToDB } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
@@ -3275,7 +3275,7 @@ const App: React.FC = () => {
       });
     
     // Data State
-    const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
+    const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
@@ -3321,6 +3321,28 @@ async function loadBookingsFromSupabase() {
     const converted = data.map(convertBookingFromDB);
     console.log('Converted bookings:', converted);
     setBookings(converted);
+  }
+}
+
+// Load clients from Supabase on mount
+useEffect(() => {
+  loadClientsFromSupabase();
+}, []);
+
+async function loadClientsFromSupabase() {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*');
+  
+  if (error) {
+    console.error('Error loading clients:', error);
+    return;
+  }
+  if (data) {
+    console.log('Raw clients from Supabase:', data);
+    const converted = data.map(convertClientFromDB);
+    console.log('Converted clients:', converted);
+    setClients(converted);
   }
 }
 
@@ -3382,8 +3404,7 @@ async function loadBookingsFromSupabase() {
         setCanUndo(true);
     };
 
-    // CRUD Handlers
-    const handleSave = (type: string, data: any) => {
+    const handleSave = async (type: string, data: any) => {
         const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
             client: setClients,
             project: setProjects,
@@ -3393,7 +3414,44 @@ async function loadBookingsFromSupabase() {
             material: setMaterials,
             user: setUsers,
         };
+        
         const updater = stateUpdater[type];
+        
+        // Prepare data with ID
+        const finalData = data.id ? data : { ...data, id: generateId() };
+        if (type === 'client' && !finalData.contacts) {
+            finalData.contacts = [];
+        }
+        
+        // Save to Supabase for clients
+        if (type === 'client') {
+            const isUpdate = data.id;
+            
+            if (isUpdate) {
+                // UPDATE existing client
+                const { error } = await supabase
+                    .from('clients')
+                    .update(convertClientToDB(finalData))
+                    .eq('id', finalData.id);
+                
+                if (error) {
+                    console.error('Error updating client:', error);
+                    return;
+                }
+            } else {
+                // INSERT new client
+                const { error } = await supabase
+                    .from('clients')
+                    .insert([convertClientToDB(finalData)]);
+                
+                if (error) {
+                    console.error('Error inserting client:', error);
+                    return;
+                }
+            }
+        }
+        
+        // Update local state
         if (data.id) { // Update
             updater(prev => prev.map(item => {
                 if (item.id !== data.id) return item;
@@ -3402,19 +3460,15 @@ async function loadBookingsFromSupabase() {
                     const { password, ...restData } = data;
                     return { ...item, ...restData };
                 }
-                return data;
+                return finalData;
             }));
         } else { // Create
-            const newData = { ...data, id: generateId() };
-            if (type === 'client' && !newData.contacts) {
-                newData.contacts = [];
-            }
-            updater(prev => [...prev, newData]);
+            updater(prev => [...prev, finalData]);
         }
         setModal({ type: null, data: null });
     };
 
-    const handleDelete = (type: string, id: string) => {
+    const handleDelete = async (type: string, id: string) => {
         const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
             client: setClients,
             project: setProjects,
@@ -3424,53 +3478,68 @@ async function loadBookingsFromSupabase() {
             material: setMaterials,
             user: setUsers,
         };
-        stateUpdater[type](prev => prev.filter(item => item.id !== id));
-    };
-    
-    // Booking Modal Handlers
-    const handleNewBooking = (resourceId?: string, date?: Date) => {
-      setSelectedBookingInfo(null);
-      setNewBookingInfo(resourceId && date ? { resourceId, date } : null);
-      setIsBookingModalOpen(true);
-    };
-    
-    const handleSelectBooking = (booking: Booking, date: Date) => {
-      setSelectedBookingInfo({ booking, date });
-      setNewBookingInfo(null);
-      setIsBookingModalOpen(true);
-    };
-    
-    const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
-    // Step 1: Prepare bookings with IDs
-    const finalBookingsToAdd = bookingsToSave.map(b => 
-        b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
-    );
-    
-    // Step 2: Save to Supabase
-    for (const booking of finalBookingsToAdd) {
-        const isUpdate = bookingsToSave.find(b => b.id === booking.id);
         
-        if (isUpdate) {
-            // UPDATE existing booking
-            await supabase
-                .from('bookings')
-                .update(convertBookingToDB(booking))
-                .eq('id', booking.id);
-        } else {
-            // INSERT new booking
-            await supabase
-                .from('bookings')
-                .insert([convertBookingToDB(booking)]);
+        // Delete from Supabase for clients
+        if (type === 'client') {
+            const { error } = await supabase
+                .from('clients')
+                .delete()
+                .eq('id', id);
+            
+            if (error) {
+                console.error('Error deleting client:', error);
+                return;
+            }
         }
-    }
-    
-    // Step 3: Update local state
-    commitBookingsChange(prev => {
-        const editedIds = new Set(finalBookingsToAdd.map(b => b.id));
-        const baseBookings = prev.filter(b => !editedIds.has(b.id));
-        return [...baseBookings, ...finalBookingsToAdd];
-    });
-};
+        
+        // Update local state
+        stateUpdater[type](prev => prev.filter(item => item.id !== id));
+    };  
+        
+        // Booking Modal Handlers
+        const handleNewBooking = (resourceId?: string, date?: Date) => {
+        setSelectedBookingInfo(null);
+        setNewBookingInfo(resourceId && date ? { resourceId, date } : null);
+        setIsBookingModalOpen(true);
+        };
+        
+        const handleSelectBooking = (booking: Booking, date: Date) => {
+        setSelectedBookingInfo({ booking, date });
+        setNewBookingInfo(null);
+        setIsBookingModalOpen(true);
+        };
+        
+        const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
+        // Step 1: Prepare bookings with IDs
+        const finalBookingsToAdd = bookingsToSave.map(b => 
+            b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
+        );
+        
+        // Step 2: Save to Supabase
+        for (const booking of finalBookingsToAdd) {
+            const isUpdate = bookingsToSave.find(b => b.id === booking.id);
+            
+            if (isUpdate) {
+                // UPDATE existing booking
+                await supabase
+                    .from('bookings')
+                    .update(convertBookingToDB(booking))
+                    .eq('id', booking.id);
+            } else {
+                // INSERT new booking
+                await supabase
+                    .from('bookings')
+                    .insert([convertBookingToDB(booking)]);
+            }
+        }
+        
+        // Step 3: Update local state
+        commitBookingsChange(prev => {
+            const editedIds = new Set(finalBookingsToAdd.map(b => b.id));
+            const baseBookings = prev.filter(b => !editedIds.has(b.id));
+            return [...baseBookings, ...finalBookingsToAdd];
+        });
+    };
     
     const handleConfirmedSaveBooking = (bookingsToSave: BookingFormData[]) => {
         if (bookingsToSave.length === 1) {
@@ -3521,63 +3590,152 @@ async function loadBookingsFromSupabase() {
     };
 
     
-    const handleDeleteEntireBooking = (bookingId: string) => {
+   const handleDeleteEntireBooking = async (bookingId: string) => {
+    // Soft delete in Supabase - set deleted_at to current timestamp
+    const { error } = await supabase
+        .from('bookings')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', bookingId);
+    
+    if (error) {
+        console.error('Error deleting booking:', error);
+        return;
+    }
+    
+    // Remove from local state
+    commitBookingsChange(prev => prev.filter(b => b.id !== bookingId));
+    setIsBookingModalOpen(false);
+};
+    
+    const handleSplitAndDeleteRange = async (bookingId: string, rangeStart: Date, rangeEnd: Date) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    const originalStart = startOfDay(new Date(booking.startDate));
+    const originalEnd = startOfDay(new Date(booking.endDate));
+    const deleteStart = startOfDay(rangeStart);
+    const deleteEnd = startOfDay(rangeEnd);
+
+    if (deleteStart > originalEnd || deleteEnd < originalStart) return; // No overlap
+
+    const effectiveDeleteStart = new Date(Math.max(originalStart.getTime(), deleteStart.getTime()));
+    const effectiveDeleteEnd = new Date(Math.min(originalEnd.getTime(), deleteEnd.getTime()));
+
+    // Check which case we're in
+    const isFullDeletion = effectiveDeleteStart <= originalStart && effectiveDeleteEnd >= originalEnd;
+    
+    const part1End = new Date(effectiveDeleteStart);
+    part1End.setDate(part1End.getDate() - 1);
+    const hasPart1 = originalStart <= part1End;
+
+    const part2Start = new Date(effectiveDeleteEnd);
+    part2Start.setDate(part2Start.getDate() + 1);
+    const hasPart2 = part2Start <= originalEnd;
+
+    // --- CASE 1: Full deletion (Soft Delete) ---
+    if (isFullDeletion) {
+        const { error } = await supabase
+            .from('bookings')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', bookingId);
+        
+        if (error) {
+            console.error('Error deleting booking:', error);
+            alert('שגיאה במחיקת ההזמנה');
+            return;
+        }
+
+        // Update local state
         commitBookingsChange(prev => prev.filter(b => b.id !== bookingId));
         setIsBookingModalOpen(false);
-    };
+        return;
+    }
+
+    // --- CASE 2: Split in the middle (UPDATE + INSERT) ---
+    if (hasPart1 && hasPart2) {
+        const updatedBooking = { ...booking, endDate: part1End };
+        const newBooking = { ...booking, id: generateId(), startDate: part2Start, endDate: originalEnd };
+
+        // UPDATE the original booking in Supabase
+        const { error: updateError } = await supabase
+            .from('bookings')
+            .update(convertBookingToDB(updatedBooking))
+            .eq('id', bookingId);
+
+        if (updateError) {
+            console.error('Error updating booking:', updateError);
+            alert('שגיאה בעדכון ההזמנה');
+            return;
+        }
+
+        // INSERT the new booking in Supabase
+        const { error: insertError } = await supabase
+            .from('bookings')
+            .insert([convertBookingToDB(newBooking)]);
+
+        if (insertError) {
+            console.error('Error inserting new booking:', insertError);
+            alert('שגיאה ביצירת הזמנה חדשה');
+            return;
+        }
+
+        // Update local state
+        commitBookingsChange(prev => {
+            const index = prev.findIndex(b => b.id === bookingId);
+            if (index === -1) return prev;
+            const newBookings = [...prev];
+            newBookings[index] = updatedBooking;
+            newBookings.push(newBooking);
+            return newBookings;
+        });
+
+        setIsBookingModalOpen(false);
+        return;
+    }
+
+    // --- CASE 3: Shorten from start or end (UPDATE only) ---
+    let updatedBooking: Booking;
     
-    const handleSplitAndDeleteRange = (bookingId: string, rangeStart: Date, rangeEnd: Date) => {
-            const booking = bookings.find(b => b.id === bookingId);
-            if (!booking) return;
+    if (hasPart1) {
+        // Shorten from end
+        updatedBooking = { ...booking, endDate: part1End };
+    } else if (hasPart2) {
+        // Shorten from start
+        updatedBooking = { ...booking, startDate: part2Start };
+    } else {
+        // This shouldn't happen (covered by Case 1), but just in case - soft delete
+        const { error } = await supabase
+            .from('bookings')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', bookingId);
+        
+        if (error) {
+            console.error('Error deleting booking:', error);
+            alert('שגיאה במחיקת ההזמנה');
+            return;
+        }
 
-            const originalStart = startOfDay(new Date(booking.startDate));
-            const originalEnd = startOfDay(new Date(booking.endDate));
-            const deleteStart = startOfDay(rangeStart);
-            const deleteEnd = startOfDay(rangeEnd);
+        commitBookingsChange(prev => prev.filter(b => b.id !== bookingId));
+        setIsBookingModalOpen(false);
+        return;
+    }
 
-            if (deleteStart > originalEnd || deleteEnd < originalStart) return; // No overlap
+    // UPDATE in Supabase
+    const { error } = await supabase
+        .from('bookings')
+        .update(convertBookingToDB(updatedBooking))
+        .eq('id', bookingId);
 
-            const effectiveDeleteStart = new Date(Math.max(originalStart.getTime(), deleteStart.getTime()));
-            const effectiveDeleteEnd = new Date(Math.min(originalEnd.getTime(), deleteEnd.getTime()));
+    if (error) {
+        console.error('Error updating booking:', error);
+        alert('שגיאה בעדכון ההזמנה');
+        return;
+    }
 
-            commitBookingsChange(prev => {
-                const index = prev.findIndex(b => b.id === bookingId);
-                if (index === -1) return prev;
-
-                const newBookings = [...prev];
-                const originalBooking = newBookings[index];
-                
-                // Case 1: The deletion covers the entire booking
-                if (effectiveDeleteStart <= originalStart && effectiveDeleteEnd >= originalEnd) {
-                    newBookings.splice(index, 1);
-                    return newBookings;
-                }
-
-                const part1End = new Date(effectiveDeleteStart);
-                part1End.setDate(part1End.getDate() - 1);
-                const hasPart1 = originalStart <= part1End;
-
-                const part2Start = new Date(effectiveDeleteEnd);
-                part2Start.setDate(part2Start.getDate() + 1);
-                const hasPart2 = part2Start <= originalEnd;
-
-                if (hasPart1 && hasPart2) { // Split in the middle
-                    newBookings[index] = { ...originalBooking, endDate: part1End };
-                    const part2Booking = { ...originalBooking, id: generateId(), startDate: part2Start, endDate: originalEnd };
-                    newBookings.push(part2Booking);
-                } else if (hasPart1) { // Shorten from end
-                    newBookings[index] = { ...originalBooking, endDate: part1End };
-                } else if (hasPart2) { // Shorten from start
-                    newBookings[index] = { ...originalBooking, startDate: part2Start };
-                } else { // This case should be covered by Case 1
-                    newBookings.splice(index, 1);
-                }
-                
-                return newBookings;
-            });
-
-            setIsBookingModalOpen(false);
-        };
+    // Update local state
+    commitBookingsChange(prev => prev.map(b => b.id === bookingId ? updatedBooking : b));
+    setIsBookingModalOpen(false);
+};
     
     const handleSplitAndDeleteDay = (bookingId: string, day: Date) => {
         handleSplitAndDeleteRange(bookingId, day, day);
