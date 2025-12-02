@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 
 import { supabase } from './supabaseClient';
-import { convertResourceFromDB, convertResourceToDB } from './helpers/supabaseHelpers';
+import { convertResourceFromDB, convertResourceToDB, convertBookingFromDB, convertBookingToDB } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
@@ -3277,7 +3277,7 @@ const App: React.FC = () => {
     // Data State
     const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
     const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-    const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS);
+    const [bookings, setBookings] = useState<Booking[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
     const [personnel, setPersonnel] = useState<Personnel[]>(INITIAL_PERSONNEL);
     const [services, setServices] = useState<TechnicalService[]>(INITIAL_TECHNICAL_SERVICES);
@@ -3300,6 +3300,27 @@ const App: React.FC = () => {
         setResources(converted);
     }
     }
+
+    // Load bookings from Supabase on mount
+useEffect(() => {
+  loadBookingsFromSupabase();
+}, []);
+
+async function loadBookingsFromSupabase() {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .is('deleted_at', null);
+  
+  if (error) {
+    console.error('Error loading bookings:', error);
+    return;
+  }
+  if (data) {
+    const converted = data.map(convertBookingFromDB);
+    setBookings(converted);
+  }
+}
 
 
     // Undo State
