@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking } from '../types';
+import { Resource, Booking, Client, Project, Personnel } from '../types';
 
 // ================================================================
 // RESOURCES (Editing Rooms)
@@ -135,4 +135,149 @@ export function convertBookingsFromDB(dbBookings: any[]): Booking[] {
  */
 export function convertBookingsToDB(jsBookings: Booking[]): any[] {
   return jsBookings.map(convertBookingToDB);
+}
+
+// ================================================================
+// CLIENTS (Customers)
+// ================================================================
+
+/**
+ * Convert Client from Supabase format (snake_case) to JavaScript format (camelCase)
+ * Note: contacts array will be loaded separately from client_contacts table
+ * @param dbClient - Client object from Supabase database
+ * @returns Client object in JavaScript format
+ */
+export function convertClientFromDB(dbClient: any): Client {
+  return {
+    id: dbClient.id,
+    name: dbClient.name,
+    businessId: dbClient.business_id,
+    contacts: [], // Will be loaded separately from client_contacts table
+    email: dbClient.email,
+    address: dbClient.address || '',
+  };
+}
+
+/**
+ * Convert Client from JavaScript format (camelCase) to Supabase format (snake_case)
+ * Note: contacts are NOT saved here - they go to client_contacts table
+ * @param jsClient - Client object in JavaScript format
+ * @returns Client object for Supabase database
+ */
+export function convertClientToDB(jsClient: Client): any {
+  return {
+    id: jsClient.id,
+    name: jsClient.name,
+    business_id: jsClient.businessId,
+    email: jsClient.email,
+    address: jsClient.address || null,
+    // contacts are NOT included - they go to client_contacts table
+  };
+}
+
+// ================================================================
+// HELPER: Convert array of clients
+// ================================================================
+
+/**
+ * Convert array of clients from Supabase to JavaScript format
+ */
+export function convertClientsFromDB(dbClients: any[]): Client[] {
+  return dbClients.map(convertClientFromDB);
+}
+
+/**
+ * Convert array of clients from JavaScript to Supabase format
+ */
+export function convertClientsToDB(jsClients: Client[]): any[] {
+  return jsClients.map(convertClientToDB);
+}
+
+// ================================================================
+// PROJECTS
+// ================================================================
+
+/**
+ * Convert Project from Supabase format (snake_case) to JavaScript format (camelCase)
+ * @param dbProject - Project object from Supabase database
+ * @returns Project object in JavaScript format
+ */
+export function convertProjectFromDB(dbProject: any): Project {
+  return {
+    id: dbProject.id,
+    name: dbProject.name,
+    clientId: dbProject.client_id,
+    status: dbProject.status,
+  };
+}
+
+/**
+ * Convert Project from JavaScript format (camelCase) to Supabase format (snake_case)
+ * @param jsProject - Project object in JavaScript format
+ * @returns Project object for Supabase database
+ */
+export function convertProjectToDB(jsProject: Project): any {
+  return {
+    id: jsProject.id,
+    name: jsProject.name,
+    client_id: jsProject.clientId,
+    status: jsProject.status,
+  };
+}
+
+/**
+ * Convert array of projects from Supabase to JavaScript format
+ */
+export function convertProjectsFromDB(dbProjects: any[]): Project[] {
+  return dbProjects.map(convertProjectFromDB);
+}
+
+/**
+ * Convert array of projects from JavaScript to Supabase format
+ */
+export function convertProjectsToDB(jsProjects: Project[]): any[] {
+  return jsProjects.map(convertProjectToDB);
+}
+// ================================================================
+// PERSONNEL (Staff Members)
+// ================================================================
+
+/**
+ * Convert Personnel from Supabase format to JavaScript format
+ * Note: Personnel has no snake_case fields, all fields are identical
+ */
+export function convertPersonnelFromDB(dbPersonnel: any): Personnel {
+  return {
+    id: dbPersonnel.id,
+    name: dbPersonnel.name,
+    role: dbPersonnel.role,
+    rate: dbPersonnel.rate,
+  };
+}
+
+/**
+ * Convert Personnel from JavaScript format to Supabase format
+ * Note: Personnel has no snake_case fields, all fields are identical
+ */
+export function convertPersonnelToDB(jsPersonnel: Personnel): any {
+  return {
+    id: jsPersonnel.id,
+    name: jsPersonnel.name,
+    role: jsPersonnel.role,
+    rate: jsPersonnel.rate,
+  };
+}
+
+/**
+ * Convert array of personnel from Supabase to JavaScript format
+ */
+export function convertPersonnelsFromDB(dbPersonnels: any[]): Personnel[] {
+  return dbPersonnels.map(convertPersonnelFromDB);
+}
+
+/**
+ * Convert array of personnel from JavaScript to Supabase format
+ */
+export function convertPersonnelsToDB(jsPersonnels: Personnel[]): any[] {
+  return jsPersonnels.map(convertPersonnelToDB);
 }

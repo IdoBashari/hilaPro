@@ -3,7 +3,13 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 
 import { supabase } from './supabaseClient';
-import { convertResourceFromDB, convertResourceToDB, convertBookingFromDB, convertBookingToDB, convertClientFromDB, convertClientToDB } from './helpers/supabaseHelpers';
+import { 
+  convertResourceFromDB, convertResourceToDB, 
+  convertBookingFromDB, convertBookingToDB, 
+  convertClientFromDB, convertClientToDB,
+  convertProjectFromDB, convertProjectToDB,
+  convertPersonnelFromDB, convertPersonnelToDB 
+} from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
@@ -1936,9 +1942,13 @@ const CrudModal: React.FC<{
     const [passwordConfirm, setPasswordConfirm] = useState('');
 
     useEffect(() => {
+    if (type === 'project' && !data) {
+        setFormData({ status: 'In Progress' });   
+    } else {
         setFormData(data || {});
-        setPasswordConfirm('');
-    },[data]);
+    }
+    setPasswordConfirm('');
+},[data, type]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -3276,7 +3286,7 @@ const App: React.FC = () => {
     
     // Data State
     const [clients, setClients] = useState<Client[]>([]);
-    const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+    const [projects, setProjects] = useState<Project[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
     const [personnel, setPersonnel] = useState<Personnel[]>(INITIAL_PERSONNEL);
@@ -3302,49 +3312,72 @@ const App: React.FC = () => {
     }
 
     // Load bookings from Supabase on mount
-useEffect(() => {
-  loadBookingsFromSupabase();
-}, []);
+    useEffect(() => {
+    loadBookingsFromSupabase();
+    }, []);
 
-async function loadBookingsFromSupabase() {
-  const { data, error } = await supabase
-    .from('bookings')
-    .select('*')
-    .is('deleted_at', null);
-  
-  if (error) {
-    console.error('Error loading bookings:', error);
-    return;
-  }
-  if (data) {
-    console.log('Raw data from Supabase:', data);
-    const converted = data.map(convertBookingFromDB);
-    console.log('Converted bookings:', converted);
-    setBookings(converted);
-  }
-}
+    async function loadBookingsFromSupabase() {
+    const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .is('deleted_at', null);
+    
+    if (error) {
+        console.error('Error loading bookings:', error);
+        return;
+    }
+    if (data) {
+        console.log('Raw data from Supabase:', data);
+        const converted = data.map(convertBookingFromDB);
+        console.log('Converted bookings:', converted);
+        setBookings(converted);
+    }
+    }
 
-// Load clients from Supabase on mount
-useEffect(() => {
-  loadClientsFromSupabase();
-}, []);
+    // Load clients from Supabase on mount
+    useEffect(() => {
+    loadClientsFromSupabase();
+    }, []);
 
-async function loadClientsFromSupabase() {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*');
-  
-  if (error) {
-    console.error('Error loading clients:', error);
-    return;
-  }
-  if (data) {
-    console.log('Raw clients from Supabase:', data);
-    const converted = data.map(convertClientFromDB);
-    console.log('Converted clients:', converted);
-    setClients(converted);
-  }
-}
+    async function loadClientsFromSupabase() {
+    const { data, error } = await supabase
+        .from('clients')
+        .select('*');
+    
+    if (error) {
+        console.error('Error loading clients:', error);
+        return;
+    }
+    if (data) {
+        console.log('Raw clients from Supabase:', data);
+        const converted = data.map(convertClientFromDB);
+        console.log('Converted clients:', converted);
+        setClients(converted);
+    }
+    }
+
+        // Load projects from Supabase on mount
+    useEffect(() => {
+    loadProjectsFromSupabase();
+    }, []);
+
+    async function loadProjectsFromSupabase() {
+    const { data, error } = await supabase
+        .from('projects')
+        .select('*');
+    
+    if (error) {
+        console.error('Error loading projects:', error);
+        return;
+    }
+    if (data) {
+        console.log('Raw projects from Supabase:', data);
+        const converted = data.map(convertProjectFromDB);
+        console.log('Converted projects:', converted);
+        setProjects(converted);
+    }
+    }
+
 
 
     // Undo State
@@ -3404,97 +3437,138 @@ async function loadClientsFromSupabase() {
         setCanUndo(true);
     };
 
-    const handleSave = async (type: string, data: any) => {
-        const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
-            client: setClients,
-            project: setProjects,
-            resource: setResources,
-            personnel: setPersonnel,
-            service: setServices,
-            material: setMaterials,
-            user: setUsers,
-        };
-        
-        const updater = stateUpdater[type];
-        
-        // Prepare data with ID
-        const finalData = data.id ? data : { ...data, id: generateId() };
-        if (type === 'client' && !finalData.contacts) {
-            finalData.contacts = [];
-        }
-        
-        // Save to Supabase for clients
-        if (type === 'client') {
-            const isUpdate = data.id;
-            
-            if (isUpdate) {
-                // UPDATE existing client
-                const { error } = await supabase
-                    .from('clients')
-                    .update(convertClientToDB(finalData))
-                    .eq('id', finalData.id);
-                
-                if (error) {
-                    console.error('Error updating client:', error);
-                    return;
-                }
-            } else {
-                // INSERT new client
-                const { error } = await supabase
-                    .from('clients')
-                    .insert([convertClientToDB(finalData)]);
-                
-                if (error) {
-                    console.error('Error inserting client:', error);
-                    return;
-                }
-            }
-        }
-        
-        // Update local state
-        if (data.id) { // Update
-            updater(prev => prev.map(item => {
-                if (item.id !== data.id) return item;
-                // For users, don't overwrite password if it's not provided
-                if (type === 'user' && !data.password) {
-                    const { password, ...restData } = data;
-                    return { ...item, ...restData };
-                }
-                return finalData;
-            }));
-        } else { // Create
-            updater(prev => [...prev, finalData]);
-        }
-        setModal({ type: null, data: null });
+  const handleSave = async (type: string, data: any) => {
+    const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
+        client: setClients,
+        project: setProjects,
+        resource: setResources,
+        personnel: setPersonnel,
+        service: setServices,
+        material: setMaterials,
+        user: setUsers,
     };
-
-    const handleDelete = async (type: string, id: string) => {
-        const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
-            client: setClients,
-            project: setProjects,
-            resource: setResources,
-            personnel: setPersonnel,
-            service: setServices,
-            material: setMaterials,
-            user: setUsers,
-        };
+    
+    const updater = stateUpdater[type];
+    
+    // Prepare data with ID
+    const finalData = data.id ? data : { ...data, id: generateId() };
+    if (type === 'client' && !finalData.contacts) {
+        finalData.contacts = [];
+    }
+    
+    // Save to Supabase for clients
+    if (type === 'client') {
+        const isUpdate = data.id;
         
-        // Delete from Supabase for clients
-        if (type === 'client') {
+        if (isUpdate) {
+            // UPDATE existing client
             const { error } = await supabase
                 .from('clients')
-                .delete()
-                .eq('id', id);
+                .update(convertClientToDB(finalData))
+                .eq('id', finalData.id);
             
             if (error) {
-                console.error('Error deleting client:', error);
+                console.error('Error updating client:', error);
+                return;
+            }
+        } else {
+            // INSERT new client
+            const { error } = await supabase
+                .from('clients')
+                .insert([convertClientToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting client:', error);
                 return;
             }
         }
+    }
+    
+    // Save to Supabase for projects
+    if (type === 'project') {
+        const isUpdate = data.id;
         
-        // Update local state
-        stateUpdater[type](prev => prev.filter(item => item.id !== id));
-    };  
+        if (isUpdate) {
+            // UPDATE existing project
+            const { error } = await supabase
+                .from('projects')
+                .update(convertProjectToDB(finalData))
+                .eq('id', finalData.id);
+            
+            if (error) {
+                console.error('Error updating project:', error);
+                return;
+            }
+        } else {
+            // INSERT new project
+            const { error } = await supabase
+                .from('projects')
+                .insert([convertProjectToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting project:', error);
+                return;
+            }
+        }
+    }
+    
+    // Update local state
+    if (data.id) { // Update
+        updater(prev => prev.map(item => {
+            if (item.id !== data.id) return item;
+            // For users, don't overwrite password if it's not provided
+            if (type === 'user' && !data.password) {
+                const { password, ...restData } = data;
+                return { ...item, ...restData };
+            }
+            return finalData;
+        }));
+    } else { // Create
+        updater(prev => [...prev, finalData]);
+    }
+    setModal({ type: null, data: null });
+    };
+
+   const handleDelete = async (type: string, id: string) => {
+    const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
+        client: setClients,
+        project: setProjects,
+        resource: setResources,
+        personnel: setPersonnel,
+        service: setServices,
+        material: setMaterials,
+        user: setUsers,
+    };
+    
+    // Delete from Supabase for clients
+    if (type === 'client') {
+        const { error } = await supabase
+            .from('clients')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting client:', error);
+            return;
+        }
+    }
+    
+    // Delete from Supabase for projects
+    if (type === 'project') {
+        const { error } = await supabase
+            .from('projects')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting project:', error);
+            return;
+        }
+    }
+    
+    // Update local state
+    stateUpdater[type](prev => prev.filter(item => item.id !== id));
+    }; 
         
         // Booking Modal Handlers
         const handleNewBooking = (resourceId?: string, date?: Date) => {
