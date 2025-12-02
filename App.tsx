@@ -10,7 +10,8 @@ import {
   convertProjectFromDB, convertProjectToDB,
   convertPersonnelFromDB, convertPersonnelToDB,
   convertTechnicalServiceFromDB, convertTechnicalServiceToDB,
-  convertMaterialFromDB, convertMaterialToDB
+  convertMaterialFromDB, convertMaterialToDB,
+  convertUserFromDB, convertUserToDB
 } from './helpers/supabaseHelpers';
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
@@ -1943,14 +1944,17 @@ const CrudModal: React.FC<{
     const [formData, setFormData] = useState(data || {});
     const [passwordConfirm, setPasswordConfirm] = useState('');
 
-    useEffect(() => {
+  useEffect(() => {
+    
     if (type === 'project' && !data) {
-        setFormData({ status: 'In Progress' });   
+        setFormData({ status: 'In Progress' });
+    } else if (type === 'user' && !data) {
+        setFormData({ role: 'admin' });
     } else {
         setFormData(data || {});
     }
     setPasswordConfirm('');
-},[data, type]);
+}, [data, type]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -3272,7 +3276,7 @@ const ClientImportModal: React.FC<{
 // --- APP COMPONENT ---
 const App: React.FC = () => {
     // Auth State
-    const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+    const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [userForPasswordReset, setUserForPasswordReset] = useState<User | null>(null);
 
@@ -3446,6 +3450,28 @@ async function loadMaterialsFromSupabase() {
   }
 }
 
+// Load users from Supabase on mount
+useEffect(() => {
+  loadUsersFromSupabase();
+}, []);
+
+async function loadUsersFromSupabase() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*');
+  
+  if (error) {
+    console.error('Error loading users:', error);
+    return;
+  }
+  if (data) {
+    console.log('Raw users from Supabase:', data);
+    const converted = data.map(convertUserFromDB);
+    console.log('Converted users:', converted);
+    setUsers(converted);
+  }
+}
+
 
 
     // Undo State
@@ -3505,7 +3531,7 @@ async function loadMaterialsFromSupabase() {
         setCanUndo(true);
     };
 
-    const handleSave = async (type: string, data: any) => {
+const handleSave = async (type: string, data: any) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
         client: setClients,
         project: setProjects,
@@ -3664,6 +3690,49 @@ async function loadMaterialsFromSupabase() {
         }
     }
     
+    // Save to Supabase for users
+if (type === 'user') {
+    const isUpdate = data.id;
+    
+    // For new users, make sure password is provided
+    if (!isUpdate && !finalData.password) {
+        console.error('Error: Password is required for new users');
+        alert('נא להזין סיסמה');
+        return;
+    }
+    
+    if (isUpdate) {
+        // UPDATE existing user
+        // If no new password provided, don't update it
+        const userDataToUpdate = finalData.password 
+            ? convertUserToDB(finalData)
+            : (() => {
+                const { password, ...dataWithoutPassword } = convertUserToDB(finalData);
+                return dataWithoutPassword;
+            })();
+        
+        const { error } = await supabase
+            .from('users')
+            .update(userDataToUpdate)
+            .eq('id', finalData.id);
+        
+        if (error) {
+            console.error('Error updating user:', error);
+            return;
+        }
+    } else {
+        // INSERT new user
+        const { error } = await supabase
+            .from('users')
+            .insert([convertUserToDB(finalData)]);
+        
+        if (error) {
+            console.error('Error inserting user:', error);
+            return;
+        }
+    }
+}
+    
     // Update local state
     if (data.id) { // Update
         updater(prev => prev.map(item => {
@@ -3681,7 +3750,7 @@ async function loadMaterialsFromSupabase() {
     setModal({ type: null, data: null });
 };
 
- const handleDelete = async (type: string, id: string) => {
+const handleDelete = async (type: string, id: string) => {
     const stateUpdater: Record<string, React.Dispatch<React.SetStateAction<any[]>>> = {
         client: setClients,
         project: setProjects,
@@ -3753,6 +3822,19 @@ async function loadMaterialsFromSupabase() {
         
         if (error) {
             console.error('Error deleting material:', error);
+            return;
+        }
+    }
+    
+    // Delete from Supabase for users
+    if (type === 'user') {
+        const { error } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting user:', error);
             return;
         }
     }

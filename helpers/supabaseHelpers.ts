@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material } from '../types';
+import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User } from '../types';
 
 // ================================================================
 // RESOURCES (Editing Rooms)
@@ -362,4 +362,49 @@ export function convertMaterialsFromDB(dbMaterials: any[]): Material[] {
  */
 export function convertMaterialsToDB(jsMaterials: Material[]): any[] {
   return jsMaterials.map(convertMaterialToDB);
+}
+// ================================================================
+// USERS (System Users)
+// ================================================================
+
+/**
+ * Convert User from Supabase format to JavaScript format
+ * Note: User has no snake_case fields, all fields are identical
+ */
+export function convertUserFromDB(dbUser: any): User {
+  return {
+    id: dbUser.id,
+    username: dbUser.username,
+    password: dbUser.password,
+    email: dbUser.email,
+    role: dbUser.role,
+  };
+}
+
+/**
+ * Convert User from JavaScript format to Supabase format
+ * Note: User has no snake_case fields, all fields are identical
+ */
+export function convertUserToDB(jsUser: User): any {
+  return {
+    id: jsUser.id,
+    username: jsUser.username,
+    password: jsUser.password,
+    email: jsUser.email,
+    role: jsUser.role,
+  };
+}
+
+/**
+ * Convert array of users from Supabase to JavaScript format
+ */
+export function convertUsersFromDB(dbUsers: any[]): User[] {
+  return dbUsers.map(convertUserFromDB);
+}
+
+/**
+ * Convert array of users from JavaScript to Supabase format
+ */
+export function convertUsersToDB(jsUsers: User[]): any[] {
+  return jsUsers.map(convertUserToDB);
 }
