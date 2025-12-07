@@ -3325,7 +3325,7 @@ const App: React.FC = () => {
     loadBookingsFromSupabase();
     }, []);
 
-   async function loadBookingsFromSupabase() {
+async function loadBookingsFromSupabase() {
     const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -3353,6 +3353,25 @@ const App: React.FC = () => {
                 booking.technicalServices = servicesData.map(s => s.technical_service_id);
             } else {
                 booking.technicalServices = [];
+            }
+            
+            // Load materials for each booking
+            const { data: materialsData, error: materialsError } = await supabase
+                .from('booking_materials')
+                .select('material_id, quantity, selling_price')
+                .eq('booking_id', booking.id);
+            
+            if (materialsError) {
+                console.error(`Error loading materials for booking ${booking.id}:`, materialsError);
+                booking.materials = [];
+            } else if (materialsData) {
+                booking.materials = materialsData.map(m => ({
+                    materialId: m.material_id,
+                    quantity: m.quantity,
+                    sellingPrice: m.selling_price
+                }));
+            } else {
+                booking.materials = [];
             }
         }
         
@@ -3924,7 +3943,7 @@ const handleDelete = async (type: string, id: string) => {
         setIsBookingModalOpen(true);
         };
         
-   const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
+ const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
     // Step 1: Prepare bookings with IDs
     const finalBookingsToAdd = bookingsToSave.map(b => 
         b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
@@ -3942,13 +3961,23 @@ const handleDelete = async (type: string, id: string) => {
                 .eq('id', booking.id);
             
             // Delete old technical services
-            const { error: deleteError } = await supabase
+            const { error: deleteServicesError } = await supabase
                 .from('booking_technical_services')
                 .delete()
                 .eq('booking_id', booking.id);
             
-            if (deleteError) {
-                console.error('Error deleting old technical services:', deleteError);
+            if (deleteServicesError) {
+                console.error('Error deleting old technical services:', deleteServicesError);
+            }
+            
+            // Delete old materials
+            const { error: deleteMaterialsError } = await supabase
+                .from('booking_materials')
+                .delete()
+                .eq('booking_id', booking.id);
+            
+            if (deleteMaterialsError) {
+                console.error('Error deleting old materials:', deleteMaterialsError);
             }
         } else {
             // INSERT new booking
@@ -3975,6 +4004,28 @@ const handleDelete = async (type: string, id: string) => {
             
             if (servicesError) {
                 console.error('Error inserting technical services:', servicesError);
+            }
+        }
+        
+        // Insert new materials (for both UPDATE and INSERT)
+        if (booking.materials && booking.materials.length > 0) {
+            const materials = booking.materials.map(material => {
+                const id = `bm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                return {
+                    id: id,
+                    booking_id: booking.id,
+                    material_id: material.materialId,
+                    quantity: material.quantity,
+                    selling_price: material.sellingPrice
+                };
+            });
+            
+            const { error: materialsError } = await supabase
+                .from('booking_materials')
+                .insert(materials);
+            
+            if (materialsError) {
+                console.error('Error inserting materials:', materialsError);
             }
         }
     }

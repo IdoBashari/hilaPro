@@ -480,3 +480,39 @@ export function prepareTechnicalServicesForDB(bookingId: string, serviceIds: str
     };
   });
 }
+// ================================================================
+// BOOKING MATERIALS (Junction Table Helpers)
+// ================================================================
+
+/**
+ * Extract material bookings from Supabase booking_materials records
+ * Converts: [{ material_id: "mat-1", quantity: 2, selling_price: 400 }]
+ * To: [{ materialId: "mat-1", quantity: 2, sellingPrice: 400 }]
+ */
+export function extractMaterialBookings(dbMaterials: any[]): any[] {
+  return dbMaterials.map(m => ({
+    materialId: m.material_id,
+    quantity: m.quantity,
+    sellingPrice: m.selling_price
+  }));
+}
+
+/**
+ * Prepare material bookings for insertion into booking_materials table
+ * @param bookingId - The booking ID these materials belong to
+ * @param materials - Array of MaterialBooking objects
+ * @returns Array of objects ready for Supabase insertion
+ */
+export function prepareMaterialsForDB(bookingId: string, materials: any[]): any[] {
+  return materials.map(material => {
+    // Generate a simple unique ID
+    const id = `bm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return {
+      id: id,
+      booking_id: bookingId,
+      material_id: material.materialId,
+      quantity: material.quantity,
+      selling_price: material.sellingPrice
+    };
+  });
+}
