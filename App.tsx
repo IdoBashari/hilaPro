@@ -3325,7 +3325,7 @@ const App: React.FC = () => {
     loadBookingsFromSupabase();
     }, []);
 
-    async function loadBookingsFromSupabase() {
+   async function loadBookingsFromSupabase() {
     const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -3338,10 +3338,28 @@ const App: React.FC = () => {
     if (data) {
         console.log('Raw data from Supabase:', data);
         const converted = data.map(convertBookingFromDB);
+        
+        // Load technical services for each booking
+        for (const booking of converted) {
+            const { data: servicesData, error: servicesError } = await supabase
+                .from('booking_technical_services')
+                .select('technical_service_id')
+                .eq('booking_id', booking.id);
+            
+            if (servicesError) {
+                console.error(`Error loading technical services for booking ${booking.id}:`, servicesError);
+                booking.technicalServices = [];
+            } else if (servicesData) {
+                booking.technicalServices = servicesData.map(s => s.technical_service_id);
+            } else {
+                booking.technicalServices = [];
+            }
+        }
+        
         console.log('Converted bookings:', converted);
         setBookings(converted);
     }
-    }
+}
 
     // Load clients from Supabase on mount
     useEffect(() => {
@@ -3572,32 +3590,61 @@ const handleSave = async (type: string, data: any) => {
     }
     
     // Save to Supabase for clients
-    if (type === 'client') {
-        const isUpdate = data.id;
+   // Save to Supabase for clients
+if (type === 'client') {
+    const isUpdate = data.id;
+    
+    if (isUpdate) {
+        // UPDATE existing client
+        const { error } = await supabase
+            .from('clients')
+            .update(convertClientToDB(finalData))
+            .eq('id', finalData.id);
         
-        if (isUpdate) {
-            // UPDATE existing client
-            const { error } = await supabase
-                .from('clients')
-                .update(convertClientToDB(finalData))
-                .eq('id', finalData.id);
-            
-            if (error) {
-                console.error('Error updating client:', error);
-                return;
-            }
-        } else {
-            // INSERT new client
-            const { error } = await supabase
-                .from('clients')
-                .insert([convertClientToDB(finalData)]);
-            
-            if (error) {
-                console.error('Error inserting client:', error);
-                return;
-            }
+        if (error) {
+            console.error('Error updating client:', error);
+            return;
+        }
+        
+        // Delete old contacts
+        const { error: deleteError } = await supabase
+            .from('client_contacts')
+            .delete()
+            .eq('client_id', finalData.id);
+        
+        if (deleteError) {
+            console.error('Error deleting old contacts:', deleteError);
+            return;
+        }
+    } else {
+        // INSERT new client
+        const { error } = await supabase
+            .from('clients')
+            .insert([convertClientToDB(finalData)]);
+        
+        if (error) {
+            console.error('Error inserting client:', error);
+            return;
         }
     }
+    
+    // Insert new contacts (for both UPDATE and INSERT)
+    if (finalData.contacts && finalData.contacts.length > 0) {
+        const contactsToInsert = finalData.contacts.map((contact: Contact) => ({
+            ...convertContactToDB(contact),
+            client_id: finalData.id
+        }));
+        
+        const { error: contactsError } = await supabase
+            .from('client_contacts')
+            .insert(contactsToInsert);
+        
+        if (contactsError) {
+            console.error('Error inserting contacts:', contactsError);
+            return;
+        }
+    }
+}
     
     // Save to Supabase for projects
     if (type === 'project') {
@@ -3877,37 +3924,68 @@ const handleDelete = async (type: string, id: string) => {
         setIsBookingModalOpen(true);
         };
         
-        const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
-        // Step 1: Prepare bookings with IDs
-        const finalBookingsToAdd = bookingsToSave.map(b => 
-            b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
-        );
+   const saveBookingsToState = async (bookingsToSave: BookingFormData[]) => {
+    // Step 1: Prepare bookings with IDs
+    const finalBookingsToAdd = bookingsToSave.map(b => 
+        b.id ? (b as Booking) : ({ ...b, id: generateId() } as Booking)
+    );
+    
+    // Step 2: Save to Supabase
+    for (const booking of finalBookingsToAdd) {
+        const isUpdate = bookingsToSave.find(b => b.id === booking.id);
         
-        // Step 2: Save to Supabase
-        for (const booking of finalBookingsToAdd) {
-            const isUpdate = bookingsToSave.find(b => b.id === booking.id);
+        if (isUpdate) {
+            // UPDATE existing booking
+            await supabase
+                .from('bookings')
+                .update(convertBookingToDB(booking))
+                .eq('id', booking.id);
             
-            if (isUpdate) {
-                // UPDATE existing booking
-                await supabase
-                    .from('bookings')
-                    .update(convertBookingToDB(booking))
-                    .eq('id', booking.id);
-            } else {
-                // INSERT new booking
-                await supabase
-                    .from('bookings')
-                    .insert([convertBookingToDB(booking)]);
+            // Delete old technical services
+            const { error: deleteError } = await supabase
+                .from('booking_technical_services')
+                .delete()
+                .eq('booking_id', booking.id);
+            
+            if (deleteError) {
+                console.error('Error deleting old technical services:', deleteError);
             }
+        } else {
+            // INSERT new booking
+            await supabase
+                .from('bookings')
+                .insert([convertBookingToDB(booking)]);
         }
         
-        // Step 3: Update local state
-        commitBookingsChange(prev => {
-            const editedIds = new Set(finalBookingsToAdd.map(b => b.id));
-            const baseBookings = prev.filter(b => !editedIds.has(b.id));
-            return [...baseBookings, ...finalBookingsToAdd];
-        });
-    };
+        // Insert new technical services (for both UPDATE and INSERT)
+        if (booking.technicalServices && booking.technicalServices.length > 0) {
+            const services = booking.technicalServices.map(serviceId => {
+                const id = `bts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                return {
+                    id: id,
+                    booking_id: booking.id,
+                    technical_service_id: serviceId,
+                    quantity: 1
+                };
+            });
+            
+            const { error: servicesError } = await supabase
+                .from('booking_technical_services')
+                .insert(services);
+            
+            if (servicesError) {
+                console.error('Error inserting technical services:', servicesError);
+            }
+        }
+    }
+    
+    // Step 3: Update local state
+    commitBookingsChange(prev => {
+        const editedIds = new Set(finalBookingsToAdd.map(b => b.id));
+        const baseBookings = prev.filter(b => !editedIds.has(b.id));
+        return [...baseBookings, ...finalBookingsToAdd];
+    });
+};
     
     const handleConfirmedSaveBooking = (bookingsToSave: BookingFormData[]) => {
         if (bookingsToSave.length === 1) {

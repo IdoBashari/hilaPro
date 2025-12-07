@@ -449,3 +449,34 @@ export function convertContactsFromDB(dbContacts: any[]): Contact[] {
 export function convertContactsToDB(jsContacts: Contact[]): any[] {
   return jsContacts.map(convertContactToDB);
 }
+// ================================================================
+// BOOKING TECHNICAL SERVICES (Junction Table Helpers)
+// ================================================================
+
+/**
+ * Extract technical service IDs from Supabase booking_technical_services records
+ * Converts: [{ technical_service_id: "tech-1" }, { technical_service_id: "tech-3" }]
+ * To: ["tech-1", "tech-3"]
+ */
+export function extractTechnicalServiceIds(dbServices: any[]): string[] {
+  return dbServices.map(s => s.technical_service_id);
+}
+
+/**
+ * Prepare technical services for insertion into booking_technical_services table
+ * @param bookingId - The booking ID these services belong to
+ * @param serviceIds - Array of technical service IDs
+ * @returns Array of objects ready for Supabase insertion
+ */
+export function prepareTechnicalServicesForDB(bookingId: string, serviceIds: string[]): any[] {
+  return serviceIds.map(serviceId => {
+    // Generate a simple unique ID (you can improve this with a better ID generator)
+    const id = `bts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return {
+      id: id,
+      booking_id: bookingId,
+      technical_service_id: serviceId,
+      quantity: 1
+    };
+  });
+}
