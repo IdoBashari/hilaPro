@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 
 import { supabase } from './supabaseClient';
+
 import { 
   convertResourceFromDB, convertResourceToDB, 
   convertBookingFromDB, convertBookingToDB, 
@@ -11,8 +12,10 @@ import {
   convertPersonnelFromDB, convertPersonnelToDB,
   convertTechnicalServiceFromDB, convertTechnicalServiceToDB,
   convertMaterialFromDB, convertMaterialToDB,
-  convertUserFromDB, convertUserToDB
+  convertUserFromDB, convertUserToDB,
+  convertContactFromDB, convertContactToDB
 } from './helpers/supabaseHelpers';
+
 import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
@@ -3345,7 +3348,7 @@ const App: React.FC = () => {
     loadClientsFromSupabase();
     }, []);
 
-    async function loadClientsFromSupabase() {
+  async function loadClientsFromSupabase() {
     const { data, error } = await supabase
         .from('clients')
         .select('*');
@@ -3357,7 +3360,25 @@ const App: React.FC = () => {
     if (data) {
         console.log('Raw clients from Supabase:', data);
         const converted = data.map(convertClientFromDB);
-        console.log('Converted clients:', converted);
+        
+        // Load contacts for each client
+        for (const client of converted) {
+            const { data: contactsData, error: contactsError } = await supabase
+                .from('client_contacts')
+                .select('*')
+                .eq('client_id', client.id);
+            
+            if (contactsError) {
+                console.error(`Error loading contacts for client ${client.id}:`, contactsError);
+                client.contacts = [];
+            } else if (contactsData) {
+                client.contacts = contactsData.map(convertContactFromDB);
+            } else {
+                client.contacts = [];
+            }
+        }
+        
+        console.log('Converted clients with contacts:', converted);
         setClients(converted);
     }
     }

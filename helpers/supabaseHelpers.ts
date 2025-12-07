@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User } from '../types';
+import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User, Contact } from '../types';
 
 // ================================================================
 // RESOURCES (Editing Rooms)
@@ -407,4 +407,45 @@ export function convertUsersFromDB(dbUsers: any[]): User[] {
  */
 export function convertUsersToDB(jsUsers: User[]): any[] {
   return jsUsers.map(convertUserToDB);
+}
+// ================================================================
+// CONTACTS (Client Contact Persons)
+// ================================================================
+
+/**
+ * Convert Contact from Supabase format to JavaScript format
+ * Note: Contact has no snake_case fields, all fields are identical
+ */
+export function convertContactFromDB(dbContact: any): Contact {
+  return {
+    id: dbContact.id,
+    name: dbContact.name,
+    phone: dbContact.phone,
+  };
+}
+
+/**
+ * Convert Contact from JavaScript format to Supabase format
+ * Note: Contact has no snake_case fields, all fields are identical
+ */
+export function convertContactToDB(jsContact: Contact): any {
+  return {
+    id: jsContact.id,
+    name: jsContact.name,
+    phone: jsContact.phone,
+  };
+}
+
+/**
+ * Convert array of contacts from Supabase to JavaScript format
+ */
+export function convertContactsFromDB(dbContacts: any[]): Contact[] {
+  return dbContacts.map(convertContactFromDB);
+}
+
+/**
+ * Convert array of contacts from JavaScript to Supabase format
+ */
+export function convertContactsToDB(jsContacts: Contact[]): any[] {
+  return jsContacts.map(convertContactToDB);
 }
