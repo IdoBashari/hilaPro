@@ -1,0 +1,15 @@
+{
+  "name": "rgb-studio-calendar-upload",
+  "version": "1.0.0",
+  "description": "Upload RGB Studio Calendar data to Supabase",
+  "type": "module",
+  "main": "upload.js",
+  "scripts": {
+    "upload": "node upload.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "author": "RGB Studio",
+  "license": "MIT"
+}

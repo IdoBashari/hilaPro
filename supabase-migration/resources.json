@@ -1,0 +1,137 @@
+[
+  {
+    "id": "offline-1",
+    "name": "חדר עריכה Offline 1",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-2",
+    "name": "חדר עריכה Offline 2",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-3",
+    "name": "חדר עריכה Offline 3",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-4",
+    "name": "חדר עריכה Offline 4",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-5",
+    "name": "חדר עריכה Offline 5",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-6",
+    "name": "חדר עריכה Offline 6",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-7",
+    "name": "חדר עריכה Offline 7",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-8",
+    "name": "חדר עריכה Offline 8",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-9",
+    "name": "חדר עריכה Offline 9",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "offline-10",
+    "name": "חדר עריכה Offline 10",
+    "type": "Offline",
+    "color": "bg-blue-200 border-blue-400 text-blue-800",
+    "list_price": 1200.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "online-1",
+    "name": "חדר עריכה Online 1",
+    "type": "Online",
+    "color": "bg-green-200 border-green-400 text-green-800",
+    "list_price": 2500.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "online-2",
+    "name": "חדר עריכה Online 2",
+    "type": "Online",
+    "color": "bg-green-200 border-green-400 text-green-800",
+    "list_price": 2500.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "online-3",
+    "name": "חדר עריכה Online 3",
+    "type": "Online",
+    "color": "bg-green-200 border-green-400 text-green-800",
+    "list_price": 2500.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "cinema-1",
+    "name": "חדר עריכה קולנוע",
+    "type": "Cinema",
+    "color": "bg-purple-200 border-purple-400 text-purple-800",
+    "list_price": 4000.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "tech-room-1",
+    "name": "חדר טכני",
+    "type": "Technical",
+    "color": "bg-gray-200 border-gray-400 text-gray-800",
+    "list_price": 500.00,
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  }
+]

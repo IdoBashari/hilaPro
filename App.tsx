@@ -3819,6 +3819,33 @@ if (type === 'user') {
         }
     }
 }
+      // Save to Supabase for resources
+    if (type === 'resource') {
+        const isUpdate = data.id;
+        
+        if (isUpdate) {
+            // UPDATE existing resource
+            const { error } = await supabase
+                .from('resources')
+                .update(convertResourceToDB(finalData))
+                .eq('id', finalData.id);
+            
+            if (error) {
+                console.error('Error updating resource:', error);
+                return;
+            }
+        } else {
+            // INSERT new resource
+            const { error } = await supabase
+                .from('resources')
+                .insert([convertResourceToDB(finalData)]);
+            
+            if (error) {
+                console.error('Error inserting resource:', error);
+                return;
+            }
+        }
+    }
     
     // Update local state
     if (data.id) { // Update
@@ -3922,6 +3949,18 @@ const handleDelete = async (type: string, id: string) => {
         
         if (error) {
             console.error('Error deleting user:', error);
+            return;
+        }
+    }
+    // Delete from Supabase for resources
+    if (type === 'resource') {
+        const { error } = await supabase
+            .from('resources')
+            .delete()
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting resource:', error);
             return;
         }
     }

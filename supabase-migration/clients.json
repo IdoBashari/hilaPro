@@ -1,0 +1,38 @@
+[
+  {
+    "id": "client-1",
+    "name": "קשת 12",
+    "business_id": "514236589",
+    "email": "contact@keshet.co.il",
+    "address": "ראול ולנברג 12, תל אביב",
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "client-2",
+    "name": "רשת 13",
+    "business_id": "514236590",
+    "email": "contact@reshet.tv",
+    "address": "הברזל 3, תל אביב",
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "client-3",
+    "name": "כאן 11",
+    "business_id": "514236591",
+    "email": "info@kan.org.il",
+    "address": "ירושלים",
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  },
+  {
+    "id": "client-4",
+    "name": "yes",
+    "business_id": "514236592",
+    "email": "service@yes.co.il",
+    "address": "כפר סבא",
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  }
+]
