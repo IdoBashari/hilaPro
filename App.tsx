@@ -1631,6 +1631,8 @@ const BookingModal: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+         console.log('startDate:', formData.startDate);
+         console.log('endDate:', formData.endDate);
         const requiredFields: (keyof Booking)[] = ['clientId', 'projectId', 'startDate', 'endDate', 'resourceId'];
         if (!isTechnicalRoom) {
             requiredFields.push('startTime', 'endTime');

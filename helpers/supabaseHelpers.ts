@@ -6,6 +6,30 @@
 import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User, Contact } from '../types';
 
 // ================================================================
+// HELPER: Convert Date to Local Date String (YYYY-MM-DD)
+// ================================================================
+
+/**
+ * Convert a Date object to a local date string (YYYY-MM-DD)
+ * This avoids timezone issues that occur with toISOString()
+ */
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parse a date string (YYYY-MM-DD) as local date, not UTC
+ * This avoids timezone issues when reading from database
+ */
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+// ================================================================
 // RESOURCES (Editing Rooms)
 // ================================================================
 
@@ -75,14 +99,14 @@ export function convertBookingFromDB(dbBooking: any): Booking {
     personnelId: dbBooking.personnel_id || undefined,
     technicalServices: [], // Will be loaded separately from junction table
     materials: [], // Will be loaded separately from junction table
-    startDate: new Date(dbBooking.start_date),
-    endDate: new Date(dbBooking.end_date),
+    startDate: parseLocalDate(dbBooking.start_date),
+    endDate: parseLocalDate(dbBooking.end_date),
     startTime: dbBooking.start_time || undefined,
     endTime: dbBooking.end_time || undefined,
     notes: dbBooking.notes || '',
     doNotChargeResource: dbBooking.do_not_charge_resource || false,
     billed: dbBooking.billed || false,
-    billedDate: dbBooking.billed_date ? new Date(dbBooking.billed_date) : undefined,
+    billedDate: dbBooking.billed_date ? parseLocalDate(dbBooking.billed_date) : undefined,
   };
 }
 
@@ -99,10 +123,10 @@ export function convertBookingToDB(jsBooking: Booking): any {
     resource_id: jsBooking.resourceId,
     personnel_id: jsBooking.personnelId || null,
     start_date: jsBooking.startDate instanceof Date 
-      ? jsBooking.startDate.toISOString().split('T')[0] 
+      ? toLocalDateString(jsBooking.startDate) 
       : jsBooking.startDate,
     end_date: jsBooking.endDate instanceof Date 
-      ? jsBooking.endDate.toISOString().split('T')[0] 
+      ? toLocalDateString(jsBooking.endDate) 
       : jsBooking.endDate,
     start_time: jsBooking.startTime || null,
     end_time: jsBooking.endTime || null,
@@ -111,7 +135,7 @@ export function convertBookingToDB(jsBooking: Booking): any {
     billed: jsBooking.billed || false,
     billed_date: jsBooking.billedDate 
       ? (jsBooking.billedDate instanceof Date 
-          ? jsBooking.billedDate.toISOString().split('T')[0] 
+          ? toLocalDateString(jsBooking.billedDate) 
           : jsBooking.billedDate)
       : null,
     billing_amount: null, // This field exists in DB but not in current types.ts
