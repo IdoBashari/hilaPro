@@ -13,10 +13,11 @@ import {
   convertTechnicalServiceFromDB, convertTechnicalServiceToDB,
   convertMaterialFromDB, convertMaterialToDB,
   convertUserFromDB, convertUserToDB,
-  convertContactFromDB, convertContactToDB
+  convertContactFromDB, convertContactToDB,
+  convertReportFromDB, convertReportToDB,
+  convertReportLineItemFromDB, convertReportLineItemToDB
 } from './helpers/supabaseHelpers';
-
-import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User } from './types';
+import { AppView, ViewMode, Booking, Client, Project, Resource, Personnel, Contact, TechnicalService, Material, MaterialBooking, User, Report, ReportLineItem } from './types';
 import { INITIAL_RESOURCES, INITIAL_PERSONNEL, INITIAL_TECHNICAL_SERVICES, INITIAL_PROJECTS, INITIAL_BOOKINGS, INITIAL_MATERIALS, INITIAL_USERS, INITIAL_CLIENTS } from './constants';
 
 // --- RESPONSIVE HOOK ---
@@ -2141,7 +2142,9 @@ const ReportsView: React.FC<{
     onOpenBilling: (bookingIds: string[]) => void;
     canUndo: boolean;
     onUndo: () => void;
-}> = ({ bookings, clients, projects, resources, personnel, services, materials, onCloseBilling, onOpenBilling, canUndo, onUndo }) => {
+    onSaveReport: (report: Report, generalItems: ReportLineItem[], detailedItems: ReportLineItem[]) => Promise<boolean>;
+    currentUserId?: string;
+}> = ({ bookings, clients, projects, resources, personnel, services, materials, onCloseBilling, onOpenBilling, canUndo, onUndo, onSaveReport, currentUserId }) => {
     const [filters, setFilters] = useState({ clientId: '', projectId: '', datePreset: 'thisMonth', startDate: '', endDate: '', status: 'all' });
     const [reportType, setReportType] = useState<'general' | 'detailed'>('general');
     const [reportData, setReportData] = useState<ReportLineItem[]>([]);
@@ -2416,6 +2419,306 @@ const ReportsView: React.FC<{
         setReportData(newReportData);
         setSelectedItems(new Set()); // Clear selection when report regenerates
     }, [bookings, filters, reportType, clients, projects, resources, personnel, services, materials]);
+
+    // ================================================================
+// Save Report to Database
+// ================================================================
+const handleSaveReport = async () => {
+    if (!filters.startDate || !filters.endDate) {
+        alert('יש לבחור טווח תאריכים');
+        return;
+    }
+
+    const start = startOfDay(new Date(filters.startDate));
+    const end = startOfDay(new Date(filters.endDate));
+    
+    const filteredBookings = bookings.filter(b => {
+        const bookingStart = startOfDay(new Date(b.startDate));
+        const bookingEnd = startOfDay(new Date(b.endDate));
+        if (filters.clientId && b.clientId !== filters.clientId) return false;
+        if (filters.projectId && b.projectId !== filters.projectId) return false;
+        if (filters.status === 'open' && b.billed) return false;
+        if (filters.status === 'closed' && !b.billed) return false;
+        return bookingStart <= end && bookingEnd >= start;
+    });
+
+    if (filteredBookings.length === 0) {
+        alert('אין נתונים להפקת דוח');
+        return;
+    }
+
+    // Generate unique report ID
+    const reportId = `report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Arrays for both report types
+    const generalItems: ReportLineItem[] = [];
+    const detailedItems: ReportLineItem[] = [];
+
+    // Generate items for each booking
+    filteredBookings.forEach(b => {
+        const resource = resources.find(r => r.id === b.resourceId);
+        const person = personnel.find(p => p.id === b.personnelId);
+        const client = clients.find(c => c.id === b.clientId);
+        const project = projects.find(p => p.id === b.projectId);
+
+        const isSingleDay = isSameDay(b.startDate, b.endDate);
+        let durationHours = 0;
+        if (isSingleDay && b.startTime && b.endTime) {
+            const startTime = new Date(`1970-01-01T${b.startTime}:00`);
+            const endTime = new Date(`1970-01-01T${b.endTime}:00`);
+            if (endTime > startTime) {
+                durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+            }
+        }
+        
+        const durationDays = Math.round((startOfDay(b.endDate).getTime() - startOfDay(b.startDate).getTime()) / (1000 * 3600 * 24)) + 1;
+        const billed = !!b.billed;
+
+        // === GENERAL ITEMS ===
+        if (resource) {
+            const price = b.doNotChargeResource ? 0 : resource.listPrice;
+            const isHourly = resource.type !== 'Offline' && isSingleDay && durationHours > 0 && durationHours < 9;
+            if (isHourly) {
+                const hourlyRate = price / 9;
+                generalItems.push({
+                    id: `${reportId}-${b.id}-resource-general`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `חדר עריכה: ${resource.name}`,
+                    notes: b.notes || '',
+                    quantity: parseFloat(durationHours.toFixed(2)),
+                    unit: 'שעות',
+                    price: parseFloat(hourlyRate.toFixed(2)),
+                    total: parseFloat((durationHours * hourlyRate).toFixed(2)),
+                    billed
+                });
+            } else {
+                generalItems.push({
+                    id: `${reportId}-${b.id}-resource-general`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `חדר עריכה: ${resource.name}`,
+                    notes: b.notes || '',
+                    quantity: durationDays,
+                    unit: 'ימים',
+                    price: price,
+                    total: durationDays * price,
+                    billed
+                });
+            }
+        }
+
+        if (person) {
+            const isHourly = isSingleDay && durationHours > 0 && durationHours < 9;
+            if (isHourly) {
+                const hourlyRate = person.rate / 9;
+                generalItems.push({
+                    id: `${reportId}-${b.id}-person-general`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `איש צוות: ${person.name}`,
+                    notes: b.notes || '',
+                    quantity: parseFloat(durationHours.toFixed(2)),
+                    unit: 'שעות',
+                    price: parseFloat(hourlyRate.toFixed(2)),
+                    total: parseFloat((durationHours * hourlyRate).toFixed(2)),
+                    billed
+                });
+            } else {
+                generalItems.push({
+                    id: `${reportId}-${b.id}-person-general`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `איש צוות: ${person.name}`,
+                    notes: b.notes || '',
+                    quantity: durationDays,
+                    unit: 'ימים',
+                    price: person.rate,
+                    total: durationDays * person.rate,
+                    billed
+                });
+            }
+        }
+
+        // === DETAILED ITEMS ===
+        if (resource) {
+            const price = b.doNotChargeResource ? 0 : resource.listPrice;
+            const isHourly = resource.type !== 'Offline' && isSingleDay && durationHours > 0 && durationHours < 9;
+            if (isHourly) {
+                const hourlyRate = price / 9;
+                detailedItems.push({
+                    id: `${reportId}-${b.id}-resource-detailed-hourly`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `חדר עריכה: ${resource.name}`,
+                    notes: b.notes || '',
+                    quantity: parseFloat(durationHours.toFixed(2)),
+                    unit: 'שעות',
+                    price: parseFloat(hourlyRate.toFixed(2)),
+                    total: parseFloat((durationHours * hourlyRate).toFixed(2)),
+                    billed
+                });
+            } else {
+                let currentDay = startOfDay(new Date(b.startDate));
+                const endDay = startOfDay(new Date(b.endDate));
+                let dayIndex = 0;
+                while (currentDay <= endDay) {
+                    if (currentDay >= start && currentDay <= end) {
+                        detailedItems.push({
+                            id: `${reportId}-${b.id}-resource-detailed-${dayIndex}`,
+                            reportId: reportId,
+                            bookingId: b.id,
+                            date: formatDate(currentDay),
+                            clientName: client?.name || '',
+                            projectName: project?.name || '',
+                            description: `חדר עריכה: ${resource.name}`,
+                            notes: b.notes || '',
+                            quantity: 1,
+                            unit: 'יום',
+                            price: price,
+                            total: price,
+                            billed
+                        });
+                    }
+                    currentDay.setDate(currentDay.getDate() + 1);
+                    dayIndex++;
+                }
+            }
+        }
+
+        if (person) {
+            const isHourly = isSingleDay && durationHours > 0 && durationHours < 9;
+            if (isHourly) {
+                const hourlyRate = person.rate / 9;
+                detailedItems.push({
+                    id: `${reportId}-${b.id}-person-detailed-hourly`,
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `איש צוות: ${person.name}`,
+                    notes: b.notes || '',
+                    quantity: parseFloat(durationHours.toFixed(2)),
+                    unit: 'שעות',
+                    price: parseFloat(hourlyRate.toFixed(2)),
+                    total: parseFloat((durationHours * hourlyRate).toFixed(2)),
+                    billed
+                });
+            } else {
+                let currentDay = startOfDay(new Date(b.startDate));
+                const endDay = startOfDay(new Date(b.endDate));
+                let dayIndex = 0;
+                while (currentDay <= endDay) {
+                    if (currentDay >= start && currentDay <= end) {
+                        detailedItems.push({
+                            id: `${reportId}-${b.id}-person-detailed-${dayIndex}`,
+                            reportId: reportId,
+                            bookingId: b.id,
+                            date: formatDate(currentDay),
+                            clientName: client?.name || '',
+                            projectName: project?.name || '',
+                            description: `איש צוות: ${person.name}`,
+                            notes: b.notes || '',
+                            quantity: 1,
+                            unit: 'יום',
+                            price: person.rate,
+                            total: person.rate,
+                            billed
+                        });
+                    }
+                    currentDay.setDate(currentDay.getDate() + 1);
+                    dayIndex++;
+                }
+            }
+        }
+
+        // === SERVICES & MATERIALS (same for both) ===
+        (b.technicalServices || []).forEach((serviceId, idx) => {
+            const service = services.find(s => s.id === serviceId);
+            if (service) {
+                const item = {
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `שירות: ${service.name}`,
+                    notes: b.notes || '',
+                    quantity: 1,
+                    unit: 'יחידה',
+                    price: service.price,
+                    total: service.price,
+                    billed
+                };
+                generalItems.push({ ...item, id: `${reportId}-${b.id}-service-${serviceId}-general` });
+                detailedItems.push({ ...item, id: `${reportId}-${b.id}-service-${serviceId}-detailed` });
+            }
+        });
+
+        (b.materials || []).forEach((matBooking, idx) => {
+            const materialInfo = materials.find(m => m.id === matBooking.materialId);
+            if (materialInfo) {
+                const item = {
+                    reportId: reportId,
+                    bookingId: b.id,
+                    date: formatDate(b.startDate),
+                    clientName: client?.name || '',
+                    projectName: project?.name || '',
+                    description: `חומר גלם: ${materialInfo.name}`,
+                    notes: b.notes || '',
+                    quantity: matBooking.quantity,
+                    unit: 'יחידות',
+                    price: matBooking.sellingPrice,
+                    total: matBooking.quantity * matBooking.sellingPrice,
+                    billed
+                };
+                generalItems.push({ ...item, id: `${reportId}-${b.id}-material-${matBooking.materialId}-general` });
+                detailedItems.push({ ...item, id: `${reportId}-${b.id}-material-${matBooking.materialId}-detailed` });
+            }
+        });
+    });
+
+    // Calculate total
+    const totalAmount = generalItems.reduce((sum, item) => sum + item.total, 0);
+
+    // Create report object
+    const report: Report = {
+        id: reportId,
+        createdAt: new Date(),
+        createdByUserId: currentUserId,
+        clientId: filters.clientId || undefined,
+        projectId: filters.projectId || undefined,
+        startDate: new Date(filters.startDate),
+        endDate: new Date(filters.endDate),
+        statusFilter: filters.status as 'all' | 'open' | 'closed',
+        totalAmount: totalAmount
+    };
+
+    // Save to database
+    const success = await onSaveReport(report, generalItems, detailedItems);
+    
+    if (success) {
+        alert('הדוח נשמר בהצלחה!');
+    } else {
+        alert('שגיאה בשמירת הדוח');
+    }
+};
 
 
     // Automatically refresh report when data or filters change
@@ -2731,7 +3034,7 @@ const ReportsView: React.FC<{
                          <label className="mr-4"><input type="radio" name="reportType" value="general" checked={reportType === 'general'} onChange={() => setReportType('general')} className="ml-1" /> כללי</label>
                         <label><input type="radio" name="reportType" value="detailed" checked={reportType === 'detailed'} onChange={() => setReportType('detailed')} className="ml-1" /> מפורט</label>
                     </div>
-                     <button onClick={generateReport} className="bg-studio-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-studio-blue-600 transition">הפק דוח</button>
+                     <button onClick={handleSaveReport} className="bg-studio-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-studio-blue-600 transition">הפק דוח</button>
                  </div>
             </div>
             
@@ -3303,6 +3606,10 @@ const App: React.FC = () => {
     const [personnel, setPersonnel] = useState<Personnel[]>([]);
     const [services, setServices] = useState<TechnicalService[]>([]);
     const [materials, setMaterials] = useState<Material[]>([]);
+   
+    const [reports, setReports] = useState<Report[]>([]);
+    const [reportLineItemsGeneral, setReportLineItemsGeneral] = useState<ReportLineItem[]>([]);
+    const [reportLineItemsDetailed, setReportLineItemsDetailed] = useState<ReportLineItem[]>([]);
 
 
     // Load resources from Supabase on mount
@@ -3327,7 +3634,7 @@ const App: React.FC = () => {
     loadBookingsFromSupabase();
     }, []);
 
-async function loadBookingsFromSupabase() {
+    async function loadBookingsFromSupabase() {
     const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -3531,6 +3838,121 @@ async function loadUsersFromSupabase() {
     setUsers(converted);
   }
 }
+
+// Load reports from Supabase on mount
+useEffect(() => {
+  loadReportsFromSupabase();
+}, []);
+
+// ================================================================
+// Load Reports from Supabase
+// ================================================================
+const loadReportsFromSupabase = async () => {
+  try {
+    // Load reports
+    const { data: reportsData, error: reportsError } = await supabase
+      .from('reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (reportsError) {
+      console.error('Error loading reports:', reportsError);
+      return;
+    }
+    
+    if (reportsData) {
+      setReports(reportsData.map(convertReportFromDB));
+    }
+    
+    // Load general line items
+    const { data: generalData, error: generalError } = await supabase
+      .from('report_line_items_general')
+      .select('*');
+    
+    if (generalError) {
+      console.error('Error loading general line items:', generalError);
+      return;
+    }
+    
+    if (generalData) {
+      setReportLineItemsGeneral(generalData.map(convertReportLineItemFromDB));
+    }
+    
+    // Load detailed line items
+    const { data: detailedData, error: detailedError } = await supabase
+      .from('report_line_items_detailed')
+      .select('*');
+    
+    if (detailedError) {
+      console.error('Error loading detailed line items:', detailedError);
+      return;
+    }
+    
+    if (detailedData) {
+      setReportLineItemsDetailed(detailedData.map(convertReportLineItemFromDB));
+    }
+    
+  } catch (error) {
+    console.error('Error in loadReportsFromSupabase:', error);
+  }
+};
+
+// ================================================================
+// Save Report to Supabase
+// ================================================================
+const saveReportToSupabase = async (
+  report: Report,
+  generalItems: ReportLineItem[],
+  detailedItems: ReportLineItem[]
+) => {
+  try {
+    // Save the report
+    const { error: reportError } = await supabase
+      .from('reports')
+      .insert(convertReportToDB(report));
+    
+    if (reportError) {
+      console.error('Error saving report:', reportError);
+      return false;
+    }
+    
+    // Save general line items
+    if (generalItems.length > 0) {
+      const generalItemsForDB = generalItems.map(convertReportLineItemToDB);
+      const { error: generalError } = await supabase
+        .from('report_line_items_general')
+        .insert(generalItemsForDB);
+      
+      if (generalError) {
+        console.error('Error saving general line items:', generalError);
+        return false;
+      }
+    }
+    
+    // Save detailed line items
+    if (detailedItems.length > 0) {
+      const detailedItemsForDB = detailedItems.map(convertReportLineItemToDB);
+      const { error: detailedError } = await supabase
+        .from('report_line_items_detailed')
+        .insert(detailedItemsForDB);
+      
+      if (detailedError) {
+        console.error('Error saving detailed line items:', detailedError);
+        return false;
+      }
+    }
+    
+    // Reload reports to update state
+    await loadReportsFromSupabase();
+    
+    console.log('Report saved successfully!');
+    return true;
+    
+  } catch (error) {
+    console.error('Error in saveReportToSupabase:', error);
+    return false;
+  }
+};
 
 
 
@@ -4739,7 +5161,7 @@ const handleDelete = async (type: string, id: string) => {
                     onEditItem={item => setModal({ type: 'user', data: item })}
                     onDeleteItem={id => handleDelete('user', id)}
                 /></div>;
-            case 'reports': return <ReportsView {...{bookings, clients, projects, resources, personnel, services, materials, onCloseBilling: handleCloseBilling, onOpenBilling: handleOpenBilling, canUndo, onUndo: handleUndo}} />;
+            case 'reports': return <ReportsView {...{bookings, clients, projects, resources, personnel, services, materials, onCloseBilling: handleCloseBilling, onOpenBilling: handleOpenBilling, canUndo, onUndo: handleUndo, onSaveReport: saveReportToSupabase, currentUserId: currentUser?.id}} />;
             default: return null;
         }
     };

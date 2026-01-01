@@ -3,7 +3,7 @@
 // Converts between JavaScript camelCase and SQL snake_case
 // ================================================================
 
-import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User, Contact } from '../types';
+import { Resource, Booking, Client, Project, Personnel, TechnicalService, Material, User, Contact, Report, ReportLineItem } from '../types';
 
 // ================================================================
 // HELPER: Convert Date to Local Date String (YYYY-MM-DD)
@@ -539,4 +539,94 @@ export function prepareMaterialsForDB(bookingId: string, materials: any[]): any[
       selling_price: material.sellingPrice
     };
   });
+}
+
+// ================================================================
+// REPORTS
+// ================================================================
+
+/**
+ * Convert Report from Supabase format (snake_case) to JavaScript format (camelCase)
+ */
+export function convertReportFromDB(dbReport: any): Report {
+  return {
+    id: dbReport.id,
+    createdAt: new Date(dbReport.created_at),
+    createdByUserId: dbReport.created_by_user_id || undefined,
+    clientId: dbReport.client_id || undefined,
+    projectId: dbReport.project_id || undefined,
+    startDate: parseLocalDate(dbReport.start_date),
+    endDate: parseLocalDate(dbReport.end_date),
+    statusFilter: dbReport.status_filter,
+    totalAmount: dbReport.total_amount,
+  };
+}
+
+/**
+ * Convert Report from JavaScript format (camelCase) to Supabase format (snake_case)
+ */
+export function convertReportToDB(jsReport: Report): any {
+  return {
+    id: jsReport.id,
+    created_at: jsReport.createdAt instanceof Date 
+      ? jsReport.createdAt.toISOString() 
+      : jsReport.createdAt,
+    created_by_user_id: jsReport.createdByUserId || null,
+    client_id: jsReport.clientId || null,
+    project_id: jsReport.projectId || null,
+    start_date: jsReport.startDate instanceof Date 
+      ? toLocalDateString(jsReport.startDate) 
+      : jsReport.startDate,
+    end_date: jsReport.endDate instanceof Date 
+      ? toLocalDateString(jsReport.endDate) 
+      : jsReport.endDate,
+    status_filter: jsReport.statusFilter,
+    total_amount: jsReport.totalAmount,
+  };
+}
+
+// ================================================================
+// REPORT LINE ITEMS
+// ================================================================
+
+/**
+ * Convert ReportLineItem from Supabase format to JavaScript format
+ */
+export function convertReportLineItemFromDB(dbItem: any): ReportLineItem {
+  return {
+    id: dbItem.id,
+    reportId: dbItem.report_id,
+    bookingId: dbItem.booking_id || undefined,
+    date: dbItem.date,
+    clientName: dbItem.client_name || '',
+    projectName: dbItem.project_name || '',
+    description: dbItem.description,
+    notes: dbItem.notes || '',
+    quantity: dbItem.quantity,
+    unit: dbItem.unit,
+    price: dbItem.price,
+    total: dbItem.total,
+    billed: dbItem.billed || false,
+  };
+}
+
+/**
+ * Convert ReportLineItem from JavaScript format to Supabase format
+ */
+export function convertReportLineItemToDB(jsItem: ReportLineItem): any {
+  return {
+    id: jsItem.id,
+    report_id: jsItem.reportId,
+    booking_id: jsItem.bookingId || null,
+    date: jsItem.date,
+    client_name: jsItem.clientName,
+    project_name: jsItem.projectName,
+    description: jsItem.description,
+    notes: jsItem.notes || null,
+    quantity: jsItem.quantity,
+    unit: jsItem.unit,
+    price: jsItem.price,
+    total: jsItem.total,
+    billed: jsItem.billed,
+  };
 }
