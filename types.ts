@@ -70,11 +70,9 @@ export interface User {
   email: string;
   role: 'admin' | 'technician';
 }
-
 // ================================================================
 // REPORTS
 // ================================================================
-
 export interface Report {
   id: string;
   createdAt: Date;
@@ -86,10 +84,9 @@ export interface Report {
   statusFilter: 'all' | 'open' | 'closed';
   totalAmount: number;
 }
-
 export interface ReportLineItem {
   id: string;
-  reportId: string;
+  reportId?: string;
   bookingId?: string;
   date: string;
   clientName: string;
@@ -102,6 +99,5 @@ export interface ReportLineItem {
   total: number;
   billed: boolean;
 }
-
 export type ViewMode = 'day' | 'week' | 'month' | 'year';
 export type AppView = 'calendar' | 'projects' | 'clients' | 'resources' | 'reports' | 'personnel' | 'services' | 'materials' | 'users';

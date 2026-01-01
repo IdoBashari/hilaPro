@@ -2121,20 +2121,7 @@ const PasswordInputGroup: React.FC<{
 
 
 // --- REPORTS VIEW ---
-interface ReportLineItem {
-    id: string;
-    bookingId: string;
-    date: string;
-    clientName: string;
-    projectName: string;
-    description: string;
-    notes: string;
-    quantity: number;
-    unit: string;
-    price: number;
-    total: number;
-    billed: boolean;
-}
+
 
 const ReportsView: React.FC<{
     bookings: Booking[], clients: Client[], projects: Project[], resources: Resource[], personnel: Personnel[], services: TechnicalService[], materials: Material[],
