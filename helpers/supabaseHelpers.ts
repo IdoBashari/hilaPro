@@ -606,7 +606,7 @@ export function convertReportLineItemFromDB(dbItem: any): ReportLineItem {
     unit: dbItem.unit,
     price: dbItem.price,
     total: dbItem.total,
-    billed: dbItem.billed || false,
+    billed: dbItem.billing_status === 'closed',
   };
 }
 
@@ -627,6 +627,6 @@ export function convertReportLineItemToDB(jsItem: ReportLineItem): any {
     unit: jsItem.unit,
     price: jsItem.price,
     total: jsItem.total,
-    billed: jsItem.billed,
+    billing_status: jsItem.billed ? 'closed' : 'open',
   };
 }

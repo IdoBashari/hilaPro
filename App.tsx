@@ -2125,7 +2125,7 @@ const PasswordInputGroup: React.FC<{
 
 const ReportsView: React.FC<{
     bookings: Booking[], clients: Client[], projects: Project[], resources: Resource[], personnel: Personnel[], services: TechnicalService[], materials: Material[],
-    onCloseBilling: (bookingIds: string[]) => void;
+    onCloseBilling: (bookingsData: { id: string; amount: number }[]) => void;
     onOpenBilling: (bookingIds: string[]) => void;
     canUndo: boolean;
     onUndo: () => void;
@@ -2684,6 +2684,10 @@ const handleSaveReport = async () => {
     // Calculate total
     const totalAmount = generalItems.reduce((sum, item) => sum + item.total, 0);
 
+    console.log('filteredBookings count:', filteredBookings.length);
+    console.log('generalItems count:', generalItems.length);
+    console.log('detailedItems count:', detailedItems.length);
+
     // Create report object
     const report: Report = {
         id: reportId,
@@ -2788,13 +2792,29 @@ const handleSaveReport = async () => {
         setShowOpenConfirmation(true);
     };
 
-    const performCloseBilling = () => {
-        const selectedRows = reportData.filter(r => selectedItems.has(r.id) && !r.billed);
-        // Map selected report rows to unique booking IDs
-        const uniqueBookingIds = Array.from(new Set(selectedRows.map(i => i.bookingId)));
-        onCloseBilling(uniqueBookingIds);
-        setShowCloseConfirmation(false);
-    };
+const performCloseBilling = () => {
+    const selectedRows = reportData.filter(r => selectedItems.has(r.id) && !r.billed);
+    
+    // Get unique booking IDs from selected rows
+    const uniqueBookingIds: string[] = Array.from(new Set(selectedRows.map(i => i.bookingId)));
+    
+    // Calculate total amount per booking from ALL rows (not just selected)
+    const bookingAmounts = new Map<string, number>();
+    uniqueBookingIds.forEach(bookingId => {
+        const allRowsForBooking = reportData.filter(r => r.bookingId === bookingId);
+        const totalAmount = allRowsForBooking.reduce((sum, row) => sum + row.total, 0);
+        bookingAmounts.set(bookingId, totalAmount);
+    });
+    
+    // Convert to array of {id, amount}
+    const bookingsData = Array.from(bookingAmounts.entries()).map(([id, amount]) => ({
+        id,
+        amount
+    }));
+    
+    onCloseBilling(bookingsData);
+    setShowCloseConfirmation(false);
+};
 
     const performOpenBilling = () => {
         const selectedRows = reportData.filter(r => selectedItems.has(r.id) && r.billed);
@@ -3893,19 +3913,30 @@ const saveReportToSupabase = async (
   detailedItems: ReportLineItem[]
 ) => {
   try {
+    console.log('=== Starting saveReportToSupabase ===');
+    console.log('Report:', report);
+    console.log('General items count:', generalItems.length);
+    console.log('Detailed items count:', detailedItems.length);
+    
     // Save the report
+    const reportForDB = convertReportToDB(report);
+    console.log('Report for DB:', reportForDB);
+    
     const { error: reportError } = await supabase
       .from('reports')
-      .insert(convertReportToDB(report));
+      .insert(reportForDB);
     
     if (reportError) {
       console.error('Error saving report:', reportError);
       return false;
     }
+    console.log('Report saved OK');
     
     // Save general line items
     if (generalItems.length > 0) {
       const generalItemsForDB = generalItems.map(convertReportLineItemToDB);
+      console.log('General items for DB:', generalItemsForDB);
+      
       const { error: generalError } = await supabase
         .from('report_line_items_general')
         .insert(generalItemsForDB);
@@ -3914,11 +3945,14 @@ const saveReportToSupabase = async (
         console.error('Error saving general line items:', generalError);
         return false;
       }
+      console.log('General items saved OK');
     }
     
     // Save detailed line items
     if (detailedItems.length > 0) {
       const detailedItemsForDB = detailedItems.map(convertReportLineItemToDB);
+      console.log('Detailed items for DB:', detailedItemsForDB);
+      
       const { error: detailedError } = await supabase
         .from('report_line_items_detailed')
         .insert(detailedItemsForDB);
@@ -3927,6 +3961,7 @@ const saveReportToSupabase = async (
         console.error('Error saving detailed line items:', detailedError);
         return false;
       }
+      console.log('Detailed items saved OK');
     }
     
     // Reload reports to update state
@@ -5002,13 +5037,147 @@ const handleDelete = async (type: string, id: string) => {
         setDeleteConfirmation({ message, onConfirm });
     };
 
-    const handleCloseBilling = (bookingIds: string[]) => {
-        commitBookingsChange(prev => prev.map(b => bookingIds.includes(b.id) ? { ...b, billed: true, billedDate: new Date() } : b));
-    };
+ const handleCloseBilling = async (bookingsData: { id: string; amount: number }[]) => {
+    const bookingIds = bookingsData.map(b => b.id);
     
-    const handleOpenBilling = (bookingIds: string[]) => {
-        commitBookingsChange(prev => prev.map(b => bookingIds.includes(b.id) ? { ...b, billed: false, billedDate: undefined } : b));
-    };
+    // 1. Update local state
+    commitBookingsChange(prev => prev.map(b => {
+        const bookingData = bookingsData.find(bd => bd.id === b.id);
+        if (bookingData) {
+            return { ...b, billed: true, billedDate: new Date(), billingAmount: bookingData.amount };
+        }
+        return b;
+    }));
+    
+    // 2. Update bookings table in Supabase
+    for (const booking of bookingsData) {
+        const { error } = await supabase
+            .from('bookings')
+            .update({
+                billed: true,
+                billed_date: new Date().toISOString().split('T')[0],
+                billing_amount: booking.amount
+            })
+            .eq('id', booking.id);
+        
+        if (error) {
+            console.error('Error updating booking billing status:', error);
+        }
+    }
+    
+    // 3. Update report_line_items_general in Supabase
+    for (const bookingId of bookingIds) {
+        const { error } = await supabase
+            .from('report_line_items_general')
+            .update({ billing_status: 'closed' })
+            .eq('booking_id', bookingId);
+        
+        if (error) {
+            console.error('Error updating general line items:', error);
+        }
+    }
+    
+    // 4. Update report_line_items_detailed in Supabase
+    for (const bookingId of bookingIds) {
+        const { error } = await supabase
+            .from('report_line_items_detailed')
+            .update({ billing_status: 'closed' })
+            .eq('booking_id', bookingId);
+        
+        if (error) {
+            console.error('Error updating detailed line items:', error);
+        }
+    }
+    
+    // 5. Update reports table in Supabase
+    for (const bookingId of bookingIds) {
+        const { data: lineItems } = await supabase
+            .from('report_line_items_general')
+            .select('report_id')
+            .eq('booking_id', bookingId);
+        
+        if (lineItems) {
+            const reportIds = Array.from(new Set(lineItems.map(item => item.report_id)));
+            for (const reportId of reportIds) {
+                const { error } = await supabase
+                    .from('reports')
+                    .update({ billing_status: 'closed' })
+                    .eq('id', reportId);
+                
+                if (error) {
+                    console.error('Error updating report billing status:', error);
+                }
+            }
+        }
+    }
+};
+    
+ const handleOpenBilling = async (bookingIds: string[]) => {
+    // 1. Update local state
+    commitBookingsChange(prev => prev.map(b => bookingIds.includes(b.id) ? { ...b, billed: false, billedDate: undefined, billingAmount: undefined } : b));
+    
+    // 2. Update bookings table in Supabase
+    for (const bookingId of bookingIds) {
+        const { error } = await supabase
+            .from('bookings')
+            .update({
+                billed: false,
+                billed_date: null,
+                billing_amount: null
+            })
+            .eq('id', bookingId);
+        
+        if (error) {
+            console.error('Error updating booking billing status:', error);
+        }
+    }
+    
+    // 3. Update report_line_items_general in Supabase
+    for (const bookingId of bookingIds) {
+        const { error } = await supabase
+            .from('report_line_items_general')
+            .update({ billing_status: 'open' })
+            .eq('booking_id', bookingId);
+        
+        if (error) {
+            console.error('Error updating general line items:', error);
+        }
+    }
+    
+    // 4. Update report_line_items_detailed in Supabase
+    for (const bookingId of bookingIds) {
+        const { error } = await supabase
+            .from('report_line_items_detailed')
+            .update({ billing_status: 'open' })
+            .eq('booking_id', bookingId);
+        
+        if (error) {
+            console.error('Error updating detailed line items:', error);
+        }
+    }
+    
+    // 5. Update reports table in Supabase
+    for (const bookingId of bookingIds) {
+        const { data: lineItems } = await supabase
+            .from('report_line_items_general')
+            .select('report_id')
+            .eq('booking_id', bookingId);
+        
+        if (lineItems) {
+            const reportIds = Array.from(new Set(lineItems.map(item => item.report_id)));
+            for (const reportId of reportIds) {
+                const { error } = await supabase
+                    .from('reports')
+                    .update({ billing_status: 'open' })
+                    .eq('id', reportId);
+                
+                if (error) {
+                    console.error('Error updating report billing status:', error);
+                }
+            }
+        }
+    }
+};
 
     const renderView = () => {
         const filteredResources = resources.filter(r => {
